@@ -1,0 +1,22 @@
+import type { EnvConfig } from "../types/env.types.js";
+
+function getEnv(key: string): string {
+    const value = process.env[key];
+
+    if (!value) {
+        throw new Error(`Missing environment variable: ${key}`);
+    }
+
+    return value;
+}
+
+export const envConfig: EnvConfig = {
+    PORT: getEnv("PORT"),
+    MONGO_URI: getEnv("MONGO_URI"),
+    JWT_ACCESS_SECRET: getEnv("JWT_ACCESS_SECRET"),
+    JWT_REFRESH_SECRET: getEnv("JWT_REFRESH_SECRET"),
+    ACCESS_TOKEN_EXPIRY: getEnv("ACCESS_TOKEN_EXPIRY"),
+    REFRESH_TOKEN_EXPIRY: getEnv("REFRESH_TOKEN_EXPIRY"),
+    CLIENT_ORIGIN: getEnv("CLIENT_ORIGIN"),
+    NODE_ENV: getEnv("NODE_ENV"),
+};
