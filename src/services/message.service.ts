@@ -145,31 +145,58 @@ export const createMessage = async ({
         }
     }
 
-    const message = await Message.create({
-        chat: chatId,
+    let message;
 
-        sender: senderId,
+    try {
+        message = await Message.create({
+            chat: chatId,
 
-        clientMessageId:
-            clientMessageId ?? null,
+            sender: senderId,
 
-        messageType,
+            clientMessageId:
+                clientMessageId ?? null,
 
-        text:
-            messageType === "text"
-                ? (text ?? null)
-                : null,
+            messageType,
 
-        mediaUrl:
-            messageType === "text"
-                ? null
-                : (mediaUrl ?? null),
+            text:
+                messageType === "text"
+                    ? (text ?? null)
+                    : null,
 
-        mediaPublicId:
-            messageType === "text"
-                ? null
-                : (mediaPublicId ?? null),
-    });
+            mediaUrl:
+                messageType === "text"
+                    ? null
+                    : (mediaUrl ?? null),
+
+            mediaPublicId:
+                messageType === "text"
+                    ? null
+                    : (mediaPublicId ?? null),
+        });
+    } catch (error: unknown) {
+
+        if (
+            clientMessageId &&
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            error.code === 11000
+        ) {
+
+            const existingMessage =
+                await Message.findOne({
+                    sender: senderId,
+                    chat: chatId,
+                    clientMessageId,
+                });
+
+            if (existingMessage) {
+                return existingMessage;
+            }
+        }
+
+        throw error;
+    }
 
     chat.lastMessage = message._id;
 
@@ -283,6 +310,7 @@ export const getChatMessages = async (
     }
     const filter: Record<string, unknown> = {
         chat: chatId,
+        deletedFor: { $ne: userId },
     };
 
     if (before) {
@@ -551,7 +579,22 @@ export const deleteMessageForEveryone = async (
         chat,
     };
 };
+export const deleteMessageForMe = async (
+    messageId: string,
+    userId: string
+) => {
+    const { message } = await getAuthorizedMessage(
+        messageId,
+        userId
+    );
 
+    await Message.updateOne(
+        { _id: message._id },
+        { $addToSet: { deletedFor: userId } }
+    );
+
+    return message;
+};
 export const createMessageBatch = async (
     senderId: string,
     messages: BatchMessageInput[]

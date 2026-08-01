@@ -8,7 +8,7 @@ import {
 import mongoose from "mongoose";
 
 import { User } from "../models/user.model.js";
-import { isBlockedEitherWay } from "../services/user.service.js";
+import { isBlockedEitherWay,getBlockDirection } from "../services/user.service.js";
 
 
 export const createOrGetChat = asyncHandler(
@@ -161,7 +161,7 @@ export const getUserChats = asyncHandler(
             })
             .populate({
                 path: "participants",
-                select: "username lastSeenAt",
+                select: "username avatarUrl lastSeenAt",
             })
             .populate({
                 path: "lastMessage",
@@ -175,12 +175,27 @@ export const getUserChats = asyncHandler(
             chatIds
         );
 
-        const chatsWithUnreadCount = chats.map((chat) => ({
-            ...chat.toObject(),
+        const chatsWithUnreadCount = await Promise.all(
+            chats.map(async (chat) => {
+                const otherParticipant = chat.participants.find(
+                    (participant: any) =>
+                        participant._id.toString() !== currentUserId
+                );
 
-            unreadCount:
-                unreadCounts.get(chat._id.toString()) ?? 0,
-        }));
+                const blockStatus = otherParticipant
+                    ? await getBlockDirection(
+                        currentUserId,
+                        otherParticipant._id.toString()
+                    )
+                    : { blockedByMe: false, blockedByThem: false };
+
+                return {
+                    ...chat.toObject(),
+                    unreadCount: unreadCounts.get(chat._id.toString()) ?? 0,
+                    ...blockStatus,
+                };
+            })
+        );
 
         res.status(200).json({
             success: true,

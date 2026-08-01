@@ -22,3 +22,25 @@ export const getAuthorizedChat = async (
 
     return chat;
 };
+
+export const getContactIds = async (
+    userId: string
+): Promise<string[]> => {
+    const userChats = await Chat.find({
+        participants: userId,
+    }).select("participants");
+
+    const contactIds = new Set<string>();
+
+    for (const chat of userChats) {
+        for (const participantId of chat.participants) {
+            const id = participantId.toString();
+
+            if (id !== userId) {
+                contactIds.add(id);
+            }
+        }
+    }
+
+    return [...contactIds];
+};

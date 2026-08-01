@@ -7,6 +7,7 @@ import {
     updateMessage,
     removeMessageForEveryone,
     sendMessageBatch,
+    removeMessageForMe,
 } from "../controllers/message.controller.js";
 
 import { authenticate } from "../middlewares/auth.middleware.js";
@@ -39,7 +40,12 @@ router.delete(
     messageRateLimiter,
     removeMessageForEveryone
 );
-
+router.delete(
+    "/:messageId/me",
+    authenticate,
+    messageRateLimiter,
+    removeMessageForMe
+);
 router.post(
     "/batch",
     authenticate,

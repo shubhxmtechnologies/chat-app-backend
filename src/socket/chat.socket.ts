@@ -193,7 +193,7 @@ export const registerChatHandlers = (
                     "receive_message",
                     message
                 );
-
+                io.to(`user:${senderId}`).emit("receive_message", message);
                 /*
                  * Recipient has at least one connected socket.
                  */

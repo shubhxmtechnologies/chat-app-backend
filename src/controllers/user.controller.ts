@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-
 import { User } from "../models/user.model.js";
 
 import { asyncHandler } from "../utils/asyncHandler.util.js";
@@ -141,28 +140,7 @@ export const updateUsername = asyncHandler(
             );
         }
 
-        const normalizedUsername = normalizeUsername(username)
-
-        if (
-            normalizedUsername.length < 3 ||
-            normalizedUsername.length > 30
-        ) {
-            throw new AppError(
-                "Username must be between 3 and 30 characters",
-                400
-            );
-        }
-
-        if (
-            !/^[a-zA-Z0-9_]+$/.test(
-                normalizedUsername
-            )
-        ) {
-            throw new AppError(
-                "Username can only contain letters, numbers and underscores",
-                400
-            );
-        }
+        const normalizedUsername    = normalizeUsername(username)
 
         const user = await User.findById(userId);
 

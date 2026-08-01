@@ -136,6 +136,15 @@ const messageSchema = new Schema<IMessage>(
             type: String,
             default: null,
         },
+        deletedFor: {
+            type: [
+                {
+                    type: Schema.Types.ObjectId,
+                    ref: "User",
+                },
+            ],
+            default: [],
+        },
     },
     {
         timestamps: true,

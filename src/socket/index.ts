@@ -19,7 +19,8 @@ import {
     setUserOnline,
     setUserOffline,
 } from "./onlineUsers.js";
-import { Chat } from "../models/chat.model.js";
+
+import { getContactIds } from "../services/chat.service.js";
 
 interface SocketData {
     user: TokenPayload;
@@ -38,7 +39,6 @@ export const setupSocket = (httpServer: HttpServer): Server => {
         },
     });
 
-    // Socket authentication
     io.use((socket, next) => {
         try {
             const token = socket.handshake.auth?.token;
@@ -60,33 +60,24 @@ export const setupSocket = (httpServer: HttpServer): Server => {
     io.on("connection", async (socket) => {
         const userId = socket.data.user.userId;
 
-        // Add this socket to user's active sockets
         const becameOnline = setUserOnline(
             userId,
             socket.id
         );
 
-        // Personal room
         await socket.join(`user:${userId}`);
 
-        // Only broadcast when user goes 0 → 1 sockets
+        // Only notify contacts when user goes 0 → 1 sockets
         if (becameOnline) {
-            socket.broadcast.emit("user_online", {
-                userId,
-            });
-        }
-        const userChats = await Chat.find({ participants: userId }).select("participants");
-        const contactIds = new Set<string>();
-        for (const chat of userChats) {
-            for (const participantId of chat.participants) {
-                const id = participantId.toString();
-                if (id !== userId) contactIds.add(id);
+            const contactIds = await getContactIds(userId);
+
+            for (const contactId of contactIds) {
+                io.to(`user:${contactId}`).emit("user_online", {
+                    userId,
+                });
             }
         }
-        for (const contactId of contactIds) {
-            io.to(`user:${contactId}`).emit("user_online", { userId });
-        }
-        // Mark messages sent while user was offline as delivered
+
         try {
             const pendingMessages =
                 await markPendingAsDelivered(userId);
@@ -117,7 +108,6 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                 socket.id
             );
 
-            // Another tab/device remains connected
             if (!becameOffline) {
                 return;
             }
@@ -130,7 +120,6 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                         lastSeenAt,
                     },
                 });
-
             } catch (error) {
                 console.error(
                     "Failed to update last seen:",
@@ -138,11 +127,15 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                 );
             }
 
-            // Only broadcast when user goes 1 → 0 sockets
-            socket.broadcast.emit("user_offline", {
-                userId,
-                lastSeenAt,
-            });
+            // Only notify contacts when user goes 1 → 0 sockets
+            const contactIds = await getContactIds(userId);
+
+            for (const contactId of contactIds) {
+                io.to(`user:${contactId}`).emit("user_offline", {
+                    userId,
+                    lastSeenAt,
+                });
+            }
         });
     });
 

@@ -39,4 +39,5 @@ export interface IMessage {
     isDeletedForEveryone: boolean;
     clientMessageId: string | null;
     deletedAt: Date | null;
+    deletedFor: Types.ObjectId[];
 }

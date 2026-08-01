@@ -1,4 +1,4 @@
-import { createMessageBatch, deleteMessageForEveryone, editMessage, getChatMessages } from "../services/message.service.js";
+import { createMessageBatch, deleteMessageForEveryone, deleteMessageForMe, editMessage, getChatMessages } from "../services/message.service.js";
 import { createMessage } from "../services/message.service.js";
 import { asyncHandler } from "../utils/asyncHandler.util.js";
 import { AppError } from "../utils/appError.util.js";
@@ -305,3 +305,24 @@ export const sendMessageBatch = asyncHandler(
         });
     }
 );
+
+export const removeMessageForMe = asyncHandler(async (req, res) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+        throw new AppError("Unauthorized", 401);
+    }
+
+    const { messageId } = req.params;
+
+    if (typeof messageId !== "string" || !mongoose.isValidObjectId(messageId)) {
+        throw new AppError("Invalid message ID", 400);
+    }
+
+    await deleteMessageForMe(messageId, userId);
+
+    res.status(200).json({
+        success: true,
+        message: "Message deleted for you",
+    });
+});

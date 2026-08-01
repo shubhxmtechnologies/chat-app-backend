@@ -76,12 +76,10 @@ export const register = asyncHandler(
         });
 
         if (existingUser) {
-            if (existingUser) {
-                throw new AppError(
-                    "An account with this username or email already exists",
-                    409
-                );
-            }
+            throw new AppError(
+                "An account with this username or email already exists",
+                409
+            );
         }
 
         /*

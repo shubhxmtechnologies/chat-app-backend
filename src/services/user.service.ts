@@ -19,3 +19,24 @@ export const isBlockedEitherWay = async (
 
     return blocked !== null;
 };
+
+export const getBlockDirection = async (
+    currentUserId: string,
+    otherUserId: string
+): Promise<{ blockedByMe: boolean; blockedByThem: boolean }> => {
+    const [blockedByMe, blockedByThem] = await Promise.all([
+        User.exists({
+            _id: currentUserId,
+            blockedUsers: otherUserId,
+        }),
+        User.exists({
+            _id: otherUserId,
+            blockedUsers: currentUserId,
+        }),
+    ]);
+
+    return {
+        blockedByMe: blockedByMe !== null,
+        blockedByThem: blockedByThem !== null,
+    };
+};
