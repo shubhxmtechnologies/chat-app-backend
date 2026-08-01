@@ -1,3 +1,4 @@
+const DUMMY_PASSWORD_HASH = "$2b$12$.7TkQ6nMiPj6k8acLZ9UjuXQ/wddHeIYyI3aZsRDk9nE.IbkUcvSS"
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import type {
@@ -15,6 +16,7 @@ import {
 import { hashToken } from "../utils/token.util.js";
 import { envConfig } from "../config/env.js";
 import { loginSchema, registerSchema } from "../validators/auth.validator.js";
+import { normalizeUsername } from "../utils/username.util.js";
 
 
 // ----------------------------------------------------
@@ -63,7 +65,7 @@ export const register = asyncHandler(
 
         const { username, email, password } = parsed.data;
 
-        const normalizedUsername = String(username).trim().toLowerCase();
+        const normalizedUsername = normalizeUsername(username);
         const normalizedEmail = String(email).trim().toLowerCase();
 
         const existingUser = await User.findOne({
@@ -74,16 +76,9 @@ export const register = asyncHandler(
         });
 
         if (existingUser) {
-            if (existingUser.username === normalizedUsername) {
+            if (existingUser) {
                 throw new AppError(
-                    "This username is already taken. Please choose a different username.",
-                    409
-                );
-            }
-
-            if (existingUser.email === normalizedEmail) {
-                throw new AppError(
-                    "An account with this email already exists. Please use a different email or sign in.",
+                    "An account with this username or email already exists",
                     409
                 );
             }
@@ -170,6 +165,11 @@ export const login = asyncHandler(
          * Don't say whether the email or password was wrong.
          */
         if (!user) {
+            await bcrypt.compare(
+                String(password),
+                DUMMY_PASSWORD_HASH
+            );
+
             throw new AppError(
                 "Invalid email or password",
                 401
@@ -300,7 +300,7 @@ export const refresh = asyncHandler(
         await user.save();
 
         res.cookie(
-            "refreshToken",
+            REFRESH_COOKIE_NAME,
             newRefreshToken,
             refreshCookieOptions
         );
@@ -358,7 +358,7 @@ export const logout = asyncHandler(
         }
 
         res.clearCookie(
-            "refreshToken",
+            REFRESH_COOKIE_NAME,
             refreshCookieBaseOptions
         );
 

@@ -4,6 +4,9 @@ import {
     sendMessage,
     getMessages,
     sendMediaMessage,
+    updateMessage,
+    removeMessageForEveryone,
+    sendMessageBatch,
 } from "../controllers/message.controller.js";
 
 import { authenticate } from "../middlewares/auth.middleware.js";
@@ -23,5 +26,24 @@ router.post(
     messageRateLimiter,
     upload.single("media"),
     sendMediaMessage
+);
+router.patch(
+    "/:messageId",
+    authenticate,
+    messageRateLimiter,
+    updateMessage
+);
+router.delete(
+    "/:messageId",
+    authenticate,
+    messageRateLimiter,
+    removeMessageForEveryone
+);
+
+router.post(
+    "/batch",
+    authenticate,
+    messageRateLimiter,
+    sendMessageBatch
 );
 export default router;

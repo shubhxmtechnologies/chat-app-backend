@@ -1,4 +1,4 @@
-import { getChatMessages } from "../services/message.service.js";
+import { createMessageBatch, deleteMessageForEveryone, editMessage, getChatMessages } from "../services/message.service.js";
 import { createMessage } from "../services/message.service.js";
 import { asyncHandler } from "../utils/asyncHandler.util.js";
 import { AppError } from "../utils/appError.util.js";
@@ -17,8 +17,13 @@ import mongoose from "mongoose";
 
 export const sendMessage = asyncHandler(async (req, res) => {
     const senderId = req.user?.userId;
-    const { chatId, text } = req.body;
-
+    const { chatId, text, clientMessageId } = req.body;
+    if (typeof chatId !== "string" || typeof text !== "string") {
+        throw new AppError("Invalid request data", 400);
+    }
+    if (clientMessageId !== undefined && typeof clientMessageId !== "string") {
+        throw new AppError("Invalid client message ID", 400);
+    } 
     if (!senderId) {
         throw new AppError("Unauthorized", 401);
     }
@@ -26,7 +31,8 @@ export const sendMessage = asyncHandler(async (req, res) => {
     const message = await createMessage({
         chatId,
         senderId,
-        text
+        text,
+        clientMessageId
     });
 
     res.status(201).json({
@@ -76,7 +82,7 @@ export const sendMediaMessage = asyncHandler(
             throw new AppError("Media file is required", 400);
         }
 
-        const { chatId, messageType } = req.body;
+        const { chatId, messageType, clientMessageId } = req.body;
 
         if (!mongoose.isValidObjectId(chatId)) {
             throw new AppError("Invalid chat ID", 400);
@@ -117,6 +123,7 @@ export const sendMediaMessage = asyncHandler(
                 messageType,
                 mediaUrl: upload.secureUrl,
                 mediaPublicId: upload.publicId,
+                clientMessageId
             });
 
             res.status(201).json({
@@ -138,5 +145,163 @@ export const sendMediaMessage = asyncHandler(
 
             throw error;
         }
+    }
+);
+
+export const updateMessage =
+    asyncHandler(async (req, res) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError(
+                "Unauthorized",
+                401
+            );
+        }
+
+        const { messageId } =
+            req.params;
+
+
+        if (typeof messageId !== "string" ||
+            !mongoose.isValidObjectId(messageId)) {
+            throw new AppError(
+                "Invalid message ID",
+                400
+            );
+        }
+
+        const { text } = req.body;
+
+        const {
+            message,
+            chat,
+        } = await editMessage(
+            messageId,
+            userId,
+            text
+        );
+
+        const io =
+            req.app.get("io");
+
+        io.to(chat._id.toString()).emit(
+            "message_edited",
+            message
+        );
+
+        res.status(200).json({
+            success: true,
+            message,
+        });
+    });
+
+export const removeMessageForEveryone =
+    asyncHandler(async (req, res) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError(
+                "Unauthorized",
+                401
+            );
+        }
+
+        const { messageId } =
+            req.params;
+
+
+        if (typeof messageId !== "string" ||
+            !mongoose.isValidObjectId(messageId)) {
+            throw new AppError(
+                "Invalid message ID",
+                400
+            );
+        }
+        const {
+            message,
+            chat,
+        } =
+            await deleteMessageForEveryone(
+                messageId,
+                userId
+            );
+
+        const io =
+            req.app.get("io");
+
+        io.to(chat._id.toString()).emit(
+            "message_deleted_for_everyone",
+            {
+                messageId:
+                    message._id.toString(),
+            }
+        );
+
+        res.status(200).json({
+            success: true,
+            message:
+                "Message deleted for everyone",
+        });
+    });
+
+export const sendMessageBatch = asyncHandler(
+    async (req, res) => {
+        const senderId = req.user?.userId;
+
+        if (!senderId) {
+            throw new AppError(
+                "Unauthorized",
+                401
+            );
+        }
+
+        const messages = req.body;
+
+        if (!Array.isArray(messages)) {
+            throw new AppError(
+                "Request body must be an array",
+                400
+            );
+        }
+        for (const item of messages) {
+            if (
+                !item ||
+                typeof item !== "object" ||
+                typeof item.chatId !== "string" ||
+                typeof item.text !== "string" ||
+                typeof item.clientMessageId !== "string"
+            ) {
+                throw new AppError("Each message must have chatId, text, and clientMessageId", 400);
+            }
+        }
+        const results =
+            await createMessageBatch(
+                senderId,
+                messages
+            );
+
+        const io = req.app.get("io");
+
+        for (const result of results) {
+            if (!result.success) {
+                continue;
+            }
+
+            const message = result.message!;
+
+
+            io.to(
+                message.chat.toString()
+            ).emit(
+                "receive_message",
+                message
+            );
+        }
+
+        res.status(200).json({
+            success: true,
+            results,
+        });
     }
 );

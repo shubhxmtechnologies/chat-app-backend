@@ -15,6 +15,9 @@ import {
     deleteAsset,
 } from "../services/cloudinary.service.js";
 
+import mongoose from "mongoose";
+import { normalizeUsername } from "../utils/username.util.js";
+
 export const uploadAvatar = asyncHandler(
     async (req: Request, res: Response) => {
         const userId = req.user?.userId;
@@ -39,7 +42,8 @@ export const uploadAvatar = asyncHandler(
             throw new AppError("User not found", 404);
         }
 
-        const oldAvatarPublicId = user.avatarPublicId;
+
+        const previousAvatar = user.avatarPublicId;
 
         const upload = await uploadBuffer(
             req.file.buffer,
@@ -49,30 +53,13 @@ export const uploadAvatar = asyncHandler(
 
         user.avatarUrl = upload.secureUrl;
         user.avatarPublicId = upload.publicId;
+        await user.save();
 
-        try {
-            await user.save();
-        } catch (error) {
-            await deleteAsset(upload.publicId, "image").catch(
-                (cleanupError) => {
-                    console.error(
-                        "Failed to clean up new avatar after save failure:",
-                        cleanupError
-                    );
-                }
-            );
-            throw error;
-        }
-
-        if (oldAvatarPublicId) {
-            void deleteAsset(oldAvatarPublicId, "image").catch(
-                (error) => {
-                    console.error(
-                        "Old avatar deletion failed:",
-                        error
-                    );
-                }
-            );
+        if (
+            previousAvatar &&
+            previousAvatar !== upload.publicId
+        ) {
+            await deleteAsset(previousAvatar, "image");
         }
 
         res.status(200).json({
@@ -81,6 +68,7 @@ export const uploadAvatar = asyncHandler(
         });
     }
 );
+
 export const updateBio = asyncHandler(
     async (req: Request, res: Response) => {
         const userId = req.user?.userId;
@@ -153,10 +141,7 @@ export const updateUsername = asyncHandler(
             );
         }
 
-        const normalizedUsername =
-            username
-                .trim()
-                .toLowerCase();
+        const normalizedUsername = normalizeUsername(username)
 
         if (
             normalizedUsername.length < 3 ||
@@ -224,3 +209,89 @@ export const updateUsername = asyncHandler(
     }
 );
 
+
+export const blockUser = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+        const { userId } = req.params;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+        if (typeof userId !== "string") {
+            throw new AppError("Invalid user ID", 400);
+        }
+        if (!mongoose.isValidObjectId(userId)) {
+            throw new AppError("Invalid user ID", 400);
+        }
+
+        const canonicalUserId = new mongoose.Types.ObjectId(
+            userId
+        ).toString();
+
+        if (currentUserId === canonicalUserId) {
+            throw new AppError(
+                "You cannot block yourself",
+                400
+            );
+        }
+
+        const userExists = await User.exists({
+            _id: canonicalUserId,
+        });
+
+        if (!userExists) {
+            throw new AppError(
+                "User not found",
+                404
+            );
+        }
+
+        await User.updateOne(
+            {
+                _id: currentUserId,
+            },
+            {
+                $addToSet: {
+                    blockedUsers: canonicalUserId,
+                },
+            }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "User blocked successfully",
+        });
+    }
+);
+
+export const unblockUser = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+        const { userId } = req.params;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        if (!mongoose.isValidObjectId(userId)) {
+            throw new AppError("Invalid user ID", 400);
+        }
+
+        await User.updateOne(
+            {
+                _id: currentUserId,
+            },
+            {
+                $pull: {
+                    blockedUsers: userId,
+                },
+            }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "User unblocked successfully",
+        });
+    }
+);

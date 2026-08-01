@@ -71,16 +71,8 @@ export const registerChatHandlers = (
 
         try {
             const userId = socket.data.user.userId;
-
-            // DB authorization happens once here.
-            await getAuthorizedChat(
-                chatId,
-                userId
-            );
-
+            await getAuthorizedChat(chatId, userId);
             await socket.join(chatId);
-
-            // Remember that THIS socket was authorized.
             joinedChats.add(chatId);
         } catch (error) {
             console.error(
@@ -98,6 +90,7 @@ export const registerChatHandlers = (
             data: {
                 chatId: string;
                 text: string;
+                clientMessageId?: string;
             },
             ack: (response: {
                 success: boolean;
@@ -149,12 +142,19 @@ export const registerChatHandlers = (
 
                 // createMessage already checks that
                 // sender belongs to this chat.
-                const message = await createMessage(
-                    {
-                        chatId,
-                        senderId,
-                        text
-                    });
+                const clientMessageId =
+                    typeof data.clientMessageId === "string" &&
+                        data.clientMessageId.length > 0 &&
+                        data.clientMessageId.length <= 100
+                        ? data.clientMessageId
+                        : undefined;
+
+                const message = await createMessage({
+                    chatId,
+                    senderId,
+                    text,
+                    ...(clientMessageId && { clientMessageId }),
+                });
 
                 const chat = await Chat.findById(chatId);
 
@@ -259,7 +259,9 @@ export const registerChatHandlers = (
             }
             try {
                 const userId = socket.data.user.userId;
-
+                if (typeof chatId !== "string" || !mongoose.isValidObjectId(chatId)) {
+                    return;
+                }
                 await getAuthorizedChat(
                     chatId,
                     userId
@@ -281,7 +283,6 @@ export const registerChatHandlers = (
                 );
 
                 const seenAt = new Date();
-
                 await Message.updateMany(
                     {
                         _id: { $in: messageIds },

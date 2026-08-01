@@ -43,7 +43,7 @@ const userSchema = new Schema<IUser>(
             type: String,
             default: null,
             trim: true,
-            maxlength: 250,
+            maxlength: 200,
         },
 
         usernameLocked: {
@@ -53,6 +53,15 @@ const userSchema = new Schema<IUser>(
         lastSeenAt: {
             type: Date,
             default: null,
+        },
+        blockedUsers: {
+            type: [
+                {
+                    type: Schema.Types.ObjectId,
+                    ref: "User",
+                },
+            ],
+            default: [],
         },
     },
 
@@ -67,6 +76,10 @@ userSchema.pre("save", async function () {
     }
 
     this.password = await bcrypt.hash(this.password, 12);
+});
+
+userSchema.index({
+    blockedUsers: 1,
 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

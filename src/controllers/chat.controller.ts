@@ -8,6 +8,7 @@ import {
 import mongoose from "mongoose";
 
 import { User } from "../models/user.model.js";
+import { isBlockedEitherWay } from "../services/user.service.js";
 
 
 export const createOrGetChat = asyncHandler(
@@ -60,7 +61,17 @@ export const createOrGetChat = asyncHandler(
                 404
             );
         }
+        const blocked = await isBlockedEitherWay(
+            currentUserId,
+            canonicalOtherUserId
+        );
 
+        if (blocked) {
+            throw new AppError(
+                "You cannot create a chat with this user",
+                403
+            );
+        }
         const participantKey = [
             canonicalCurrentUserId,
             canonicalOtherUserId,

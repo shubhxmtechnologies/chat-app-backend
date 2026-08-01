@@ -19,6 +19,7 @@ import {
     setUserOnline,
     setUserOffline,
 } from "./onlineUsers.js";
+import { Chat } from "../models/chat.model.js";
 
 interface SocketData {
     user: TokenPayload;
@@ -74,7 +75,17 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                 userId,
             });
         }
-
+        const userChats = await Chat.find({ participants: userId }).select("participants");
+        const contactIds = new Set<string>();
+        for (const chat of userChats) {
+            for (const participantId of chat.participants) {
+                const id = participantId.toString();
+                if (id !== userId) contactIds.add(id);
+            }
+        }
+        for (const contactId of contactIds) {
+            io.to(`user:${contactId}`).emit("user_online", { userId });
+        }
         // Mark messages sent while user was offline as delivered
         try {
             const pendingMessages =
@@ -119,6 +130,7 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                         lastSeenAt,
                     },
                 });
+
             } catch (error) {
                 console.error(
                     "Failed to update last seen:",

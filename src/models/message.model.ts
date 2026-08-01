@@ -114,17 +114,49 @@ const messageSchema = new Schema<IMessage>(
             type: Date,
             default: null,
         },
+        isEdited: {
+            type: Boolean,
+            default: false,
+        },
+
+        editedAt: {
+            type: Date,
+            default: null,
+        },
+        isDeletedForEveryone: {
+            type: Boolean,
+            default: false,
+        },
+
+        deletedAt: {
+            type: Date,
+            default: null,
+        },
+        clientMessageId: {
+            type: String,
+            default: null,
+        },
     },
     {
         timestamps: true,
     }
 );
 
-messageSchema.index({
-    chat: 1,
-    createdAt: -1,
-    _id: -1,
-});
+messageSchema.index(
+    {
+        sender: 1,
+        chat: 1,
+        clientMessageId: 1,
+    },
+    {
+        unique: true,
+        partialFilterExpression: {
+            clientMessageId: {
+                $type: "string",
+            },
+        },
+    }
+);
 
 export const Message = mongoose.model<IMessage>(
     "Message",

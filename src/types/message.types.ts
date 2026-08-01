@@ -33,4 +33,10 @@ export interface IMessage {
     createdAt: Date;
 
     updatedAt: Date;
+    isEdited: boolean;
+    editedAt: Date | null;
+
+    isDeletedForEveryone: boolean;
+    clientMessageId: string | null;
+    deletedAt: Date | null;
 }
