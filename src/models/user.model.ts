@@ -29,6 +29,27 @@ const userSchema = new Schema<IUser>(
             type: String,
             default: null,
         },
+        avatarUrl: {
+            type: String,
+            default: null,
+        },
+
+        avatarPublicId: {
+            type: String,
+            default: null,
+        },
+
+        bio: {
+            type: String,
+            default: null,
+            trim: true,
+            maxlength: 250,
+        },
+
+        usernameLocked: {
+            type: Boolean,
+            default: false,
+        },
         lastSeenAt: {
             type: Date,
             default: null,

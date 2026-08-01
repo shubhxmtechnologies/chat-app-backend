@@ -5,15 +5,32 @@ export type MessageStatus =
     | "delivered"
     | "seen";
 
+export type MessageType =
+    | "text"
+    | "image"
+    | "sticker"
+    | "voice";
+
 export interface IMessage {
     chat: Types.ObjectId;
+
     sender: Types.ObjectId;
-    text: string;
+
+    messageType: MessageType;
+
+    text: string | null;
+
+    mediaUrl: string | null;
+
+    mediaPublicId: string | null;
 
     status: MessageStatus;
+
     deliveredAt: Date | null;
+
     seenAt: Date | null;
 
     createdAt: Date;
+
     updatedAt: Date;
 }

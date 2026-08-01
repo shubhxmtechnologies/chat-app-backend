@@ -19,4 +19,13 @@ export const envConfig: EnvConfig = {
     REFRESH_TOKEN_EXPIRY: getEnv("REFRESH_TOKEN_EXPIRY"),
     CLIENT_ORIGIN: getEnv("CLIENT_ORIGIN"),
     NODE_ENV: getEnv("NODE_ENV"),
+    CLOUDINARY_CLOUD_NAME: getEnv(
+        "CLOUDINARY_CLOUD_NAME"
+    ),
+    CLOUDINARY_API_KEY: getEnv(
+        "CLOUDINARY_API_KEY"
+    ),
+    CLOUDINARY_API_SECRET: getEnv(
+        "CLOUDINARY_API_SECRET"
+    ),
 };

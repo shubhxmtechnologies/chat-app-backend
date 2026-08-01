@@ -1,13 +1,31 @@
 import { Chat } from "../models/chat.model.js";
 import { Message } from "../models/message.model.js";
+import { MessageType } from "../types/message.types.js";
 import { AppError } from "../utils/appError.util.js";
 import mongoose from "mongoose";
 
-export const createMessage = async (
-    chatId: string,
-    senderId: string,
-    text: string
-) => {
+interface CreateMessageInput {
+    chatId: string;
+    senderId: string;
+
+    messageType?: MessageType;
+
+    text?: string;
+
+    mediaUrl?: string;
+
+    mediaPublicId?: string;
+}
+
+
+export const createMessage = async ({
+    chatId,
+    senderId,
+    messageType = "text",
+    text,
+    mediaUrl,
+    mediaPublicId,
+}: CreateMessageInput) => {
     if (!mongoose.isValidObjectId(chatId)) {
         throw new AppError(
             "Invalid chat ID",
@@ -15,27 +33,43 @@ export const createMessage = async (
         );
     }
 
-    if (typeof text !== "string") {
-        throw new AppError(
-            "Message must be text",
-            400
-        );
-    }
-    const normalizedText = text.trim();
+    if (messageType === "text") {
+        if (typeof text !== "string") {
+            throw new AppError(
+                "Message must be text",
+                400
+            );
+        }
 
-    if (!normalizedText) {
-        throw new AppError(
-            "Message cannot be empty",
-            400
-        );
+        const normalizedText = text.trim();
+
+        if (!normalizedText) {
+            throw new AppError(
+                "Message cannot be empty",
+                400
+            );
+        }
+
+        if (normalizedText.length > 5000) {
+            throw new AppError(
+                "Message is too long",
+                400
+            );
+        }
+
+        text = normalizedText;
+    } else {
+        if (!mediaUrl || !mediaPublicId) {
+            throw new AppError(
+                "Media upload failed",
+                400
+            );
+        }
+
+        text = undefined;
     }
 
-    if (normalizedText.length > 5000) {
-        throw new AppError(
-            "Message is too long",
-            400
-        );
-    }
+
     const chat = await Chat.findById(chatId);
 
     if (!chat) {
@@ -52,8 +86,25 @@ export const createMessage = async (
 
     const message = await Message.create({
         chat: chatId,
+
         sender: senderId,
-        text: normalizedText,
+
+        messageType,
+
+        text:
+            messageType === "text"
+                ? (text ?? null)
+                : null,
+
+        mediaUrl:
+            messageType === "text"
+                ? null
+                : (mediaUrl ?? null),
+
+        mediaPublicId:
+            messageType === "text"
+                ? null
+                : (mediaPublicId ?? null),
     });
 
     chat.lastMessage = message._id;

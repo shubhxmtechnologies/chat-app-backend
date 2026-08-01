@@ -16,17 +16,92 @@ const messageSchema = new Schema<IMessage>(
             required: true,
         },
 
+        messageType: {
+            type: String,
+            enum: [
+                "text",
+                "image",
+                "sticker",
+                "voice",
+            ],
+            default: "text",
+        },
+
         text: {
             type: String,
-            required: true,
             trim: true,
             minlength: 1,
             maxlength: 5000,
+
+            default: null,
+
+            validate: {
+                validator: function (value: string | null) {
+                    const doc = this as IMessage;
+
+                    if (doc.messageType === "text") {
+                        return (
+                            typeof value === "string" &&
+                            value.trim().length > 0
+                        );
+                    }
+
+                    return value === null;
+                },
+
+                message:
+                    "Text messages require text. Media messages must not contain text.",
+            },
         },
 
+        mediaUrl: {
+            type: String,
+            default: null,
+            validate: {
+                validator: function (value: string | null) {
+                    const doc = this as IMessage;
+
+                    if (doc.messageType === "text") {
+                        return value === null;
+                    }
+
+                    return (
+                        typeof value === "string" &&
+                        value.trim().length > 0
+                    );
+                },
+                message:
+                    "Media messages require a media URL. Text messages must not contain one.",
+            },
+        },
+
+        mediaPublicId: {
+            type: String,
+            default: null,
+            validate: {
+                validator: function (value: string | null) {
+                    const doc = this as IMessage;
+
+                    if (doc.messageType === "text") {
+                        return value === null;
+                    }
+
+                    return (
+                        typeof value === "string" &&
+                        value.trim().length > 0
+                    );
+                },
+                message:
+                    "Media messages require a Cloudinary public ID. Text messages must not contain one.",
+            },
+        },
         status: {
             type: String,
-            enum: ["sent", "delivered", "seen"],
+            enum: [
+                "sent",
+                "delivered",
+                "seen",
+            ],
             default: "sent",
         },
 

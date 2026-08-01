@@ -150,10 +150,11 @@ export const registerChatHandlers = (
                 // createMessage already checks that
                 // sender belongs to this chat.
                 const message = await createMessage(
-                    chatId,
-                    senderId,
-                    text
-                );
+                    {
+                        chatId,
+                        senderId,
+                        text
+                    });
 
                 const chat = await Chat.findById(chatId);
 
