@@ -13,9 +13,13 @@ export const errorHandler = (
     res: Response,
     next: NextFunction
 ): void => {
+    console.log(err);
+
     if (res.headersSent) {
         return next(err);
     }
+
+
     if (err instanceof multer.MulterError) {
 
         let message =
@@ -44,6 +48,7 @@ export const errorHandler = (
         return;
     }
 
+    
 
 
     res.status(500).json({

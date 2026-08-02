@@ -125,6 +125,7 @@ export const register = asyncHandler(
                 id: userId,
                 username: user.username,
                 email: user.email,
+                avatarUrl: user.avatarUrl,
             },
         });
     }
@@ -212,7 +213,8 @@ export const login = asyncHandler(
                 id: userId,
                 username: user.username,
                 email: user.email,
-            },
+                avatarUrl: user.avatarUrl,
+            }
         });
     }
 );
@@ -306,6 +308,12 @@ export const refresh = asyncHandler(
         res.status(200).json({
             success: true,
             accessToken,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                avatarUrl: user.avatarUrl,
+            }
         });
     }
 );

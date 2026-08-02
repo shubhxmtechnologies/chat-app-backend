@@ -126,6 +126,19 @@ export const sendMediaMessage = asyncHandler(
                 clientMessageId
             });
 
+            try {
+                const chat = await getAuthorizedChat(chatId, senderId);
+                const recipientId = chat.participants.find((p) => p.toString() !== senderId)?.toString();
+                const io = req.app.get("io");
+
+                if (recipientId) {
+                    io.to(`user:${recipientId}`).emit("receive_message", message);
+                }
+                io.to(`user:${senderId}`).emit("receive_message", message);
+            } catch (error) {
+                console.error("Failed to emit media message socket event:", error);
+            }
+            
             res.status(201).json({
                 success: true,
                 message,

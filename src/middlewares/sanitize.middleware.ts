@@ -41,8 +41,16 @@ export const sanitizeRequest = (
     next: NextFunction
 ): void => {
     req.body = sanitize(req.body);
-    req.query = sanitize(req.query) as typeof req.query;
-    req.params = sanitize(req.params) as typeof req.params;
+
+    // req.query and req.params are read-only getters in Express 5,
+    // so we sanitize their values in-place instead of reassigning.
+    for (const key of Object.keys(req.query)) {
+        (req.query as Record<string, unknown>)[key] = sanitize(req.query[key]);
+    }
+
+    for (const key of Object.keys(req.params)) {
+        req.params[key] = sanitize(req.params[key]) as string;
+    }
 
     next();
 };

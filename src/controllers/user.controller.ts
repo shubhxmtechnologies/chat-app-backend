@@ -3,7 +3,7 @@ import { User } from "../models/user.model.js";
 
 import { asyncHandler } from "../utils/asyncHandler.util.js";
 import { AppError } from "../utils/appError.util.js";
-
+import { escapeRegex } from "../utils/regexEscape.util.js";
 import {
     MEDIA_LIMITS,
     validateMedia,
@@ -273,3 +273,47 @@ export const unblockUser = asyncHandler(
         });
     }
 );
+
+export const searchUsers = asyncHandler(
+    async (req: Request, res: Response) => {
+        const currentUserId = req.user?.userId;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const q = req.query.q;
+
+        if (typeof q !== "string" || q.trim().length < 2) {
+            res.status(200).json({
+                success: true,
+                users: [],
+            });
+            return;
+        }
+
+        const pattern = new RegExp(escapeRegex(q.trim()), "i");
+
+        const currentUser = await User.findById(currentUserId)
+            .select("blockedUsers")
+            .lean();
+
+        const excludedIds = [
+            currentUserId,
+            ...(currentUser?.blockedUsers.map((id) => id.toString()) ?? []),
+        ];
+
+        const users = await User.find({
+            _id: { $nin: excludedIds },
+            blockedUsers: { $ne: currentUserId },
+            username: pattern,
+        })
+            .select("username avatarUrl")
+            .limit(3);
+
+        res.status(200).json({
+            success: true,
+            users,
+        });
+    }
+); 

@@ -7,6 +7,8 @@ import {
     unblockUser,
 } from "../controllers/user.controller.js";
 import { updateBio, updateUsername, uploadAvatar } from "../controllers/user.controller.js";
+import { searchUsers } from "../controllers/user.controller.js";
+import { searchRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
 
@@ -40,5 +42,10 @@ router.post(
     authenticate,
     unblockUser
 );
-
+router.get(
+    "/search",
+    authenticate,
+    searchRateLimiter,
+    searchUsers
+);
 export default router;

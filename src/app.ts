@@ -28,6 +28,8 @@ app.use(
         limit: "100kb",
     })
 );
+console.log(envConfig.CLIENT_ORIGIN);
+
 app.use(cookieParser());
 app.use(sanitizeRequest);
 app.use(
@@ -36,6 +38,8 @@ app.use(
         credentials: true,
     })
 );
+
+
 
 app.use(generalRateLimiter);
 

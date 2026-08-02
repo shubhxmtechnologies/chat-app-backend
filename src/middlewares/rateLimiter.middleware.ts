@@ -53,3 +53,17 @@ export const registerRateLimiter = rateLimit({
             "Too many registration attempts. Please try again later.",
     },
 });
+
+
+export const searchRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 30,
+
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+
+    message: {
+        success: false,
+        message: "You're searching too quickly.",
+    },
+});
