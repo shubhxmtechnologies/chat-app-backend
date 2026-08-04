@@ -140,7 +140,7 @@ export const updateUsername = asyncHandler(
             );
         }
 
-        const normalizedUsername    = normalizeUsername(username)
+        const normalizedUsername = normalizeUsername(username)
 
         const user = await User.findById(userId);
 
@@ -284,12 +284,16 @@ export const searchUsers = asyncHandler(
 
         const q = req.query.q;
 
-        if (typeof q !== "string" || q.trim().length < 2) {
-            res.status(200).json({
-                success: true,
-                users: [],
-            });
-            return;
+        try {
+            if (typeof q !== "string" || q.trim().length < 2 || q.trim().length > 50) {
+                res.status(200).json({
+                    success: true,
+                    users: [],
+                });
+                return;
+            }
+        } catch (error) {
+            throw new AppError("Invalid search query", 400);
         }
 
         const pattern = new RegExp(escapeRegex(q.trim()), "i");

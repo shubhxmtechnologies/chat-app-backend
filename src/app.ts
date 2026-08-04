@@ -28,7 +28,6 @@ app.use(
         limit: "100kb",
     })
 );
-console.log(envConfig.CLIENT_ORIGIN);
 
 app.use(cookieParser());
 app.use(sanitizeRequest);
@@ -67,6 +66,8 @@ app.use((req, res) => {
     res.status(404).json({
         success: false,
         message: "Route not found",
+        route: req.originalUrl,
+        method:req.method
     });
 });
 

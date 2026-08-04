@@ -21,9 +21,15 @@ export const sendMessage = asyncHandler(async (req, res) => {
     if (typeof chatId !== "string" || typeof text !== "string") {
         throw new AppError("Invalid request data", 400);
     }
-    if (clientMessageId !== undefined && typeof clientMessageId !== "string") {
-        throw new AppError("Invalid client message ID", 400);
-    } 
+    
+    try {
+        if (clientMessageId !== undefined && (typeof clientMessageId !== "string" || clientMessageId.length > 100)) {
+            throw new AppError("Invalid client message ID", 400);
+        }
+    } catch (error) {
+        throw error;
+    }
+
     if (!senderId) {
         throw new AppError("Unauthorized", 401);
     }
@@ -84,6 +90,14 @@ export const sendMediaMessage = asyncHandler(
 
         const { chatId, messageType, clientMessageId } = req.body;
 
+        try {
+            if (clientMessageId !== undefined && (typeof clientMessageId !== "string" || clientMessageId.length > 100)) {
+                throw new AppError("Invalid client message ID", 400);
+            }
+        } catch (error) {
+            throw error;
+        }
+
         if (!mongoose.isValidObjectId(chatId)) {
             throw new AppError("Invalid chat ID", 400);
         }
@@ -138,7 +152,7 @@ export const sendMediaMessage = asyncHandler(
             } catch (error) {
                 console.error("Failed to emit media message socket event:", error);
             }
-            
+
             res.status(201).json({
                 success: true,
                 message,
@@ -278,16 +292,22 @@ export const sendMessageBatch = asyncHandler(
             );
         }
         for (const item of messages) {
-            if (
-                !item ||
-                typeof item !== "object" ||
-                typeof item.chatId !== "string" ||
-                typeof item.text !== "string" ||
-                typeof item.clientMessageId !== "string"
-            ) {
-                throw new AppError("Each message must have chatId, text, and clientMessageId", 400);
+            try {
+                if (
+                    !item ||
+                    typeof item !== "object" ||
+                    typeof item.chatId !== "string" ||
+                    typeof item.text !== "string" ||
+                    typeof item.clientMessageId !== "string" ||
+                    item.clientMessageId.length > 100
+                ) {
+                    throw new AppError("Invalid batch message payload", 400);
+                }
+            } catch (error) {
+                throw error;
             }
         }
+        
         const results =
             await createMessageBatch(
                 senderId,
