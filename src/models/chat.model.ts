@@ -31,6 +31,8 @@ const chatSchema = new Schema<IChat>(
         participantKey: {
             type: String,
             required: true,
+            minlength: 1,
+            maxlength: 100,
         },
         deletedFor: {
             type: [

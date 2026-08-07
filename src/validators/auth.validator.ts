@@ -4,8 +4,8 @@ export const registerSchema = z.object({
     username: z
         .string()
         .trim()
-        .min(3)
-        .max(30)
+        .min(5, "Username must be between 5 and 14 characters")
+        .max(14, "Username must be between 5 and 14 characters")
         .regex(
             /^[a-zA-Z0-9_]+$/,
             "Username can only contain letters, numbers and underscores"
@@ -14,42 +14,44 @@ export const registerSchema = z.object({
     email: z
         .string()
         .trim()
-        .email()
-        .max(254),
+        .email("Invalid email address")
+        .min(13, "Email must be between 13 and 30 characters")
+        .max(30, "Email must be between 13 and 30 characters"),
 
     password: z
         .string()
-        .min(8)
-        .max(128),
+        .min(8, "Password must be between 8 and 16 characters")
+        .max(16, "Password must be between 8 and 16 characters"),
         
     firstName: z
         .string()
         .trim()
-        .min(1)
-        .max(50),
+        .min(1, "First name is required")
+        .max(50, "First name cannot exceed 50 characters"),
         
     lastName: z
         .string()
         .trim()
-        .max(50)
-        .optional(),
+        .max(50, "Last name cannot exceed 50 characters")
+        .nullish(),
         
     bio: z
         .string()
         .trim()
-        .max(200)
-        .optional(),
+        .max(200, "Bio cannot exceed 200 characters")
+        .nullish(),
 });
 
 export const loginSchema = z.object({
     email: z
         .string()
         .trim()
-        .email()
-        .max(254),
+        .email("Invalid email address")
+        .min(13, "Email must be between 13 and 30 characters")
+        .max(30, "Email must be between 13 and 30 characters"),
 
     password: z
         .string()
-        .min(1)
-        .max(128),
+        .min(8, "Password must be between 8 and 16 characters")
+        .max(16, "Password must be between 8 and 16 characters"),
 });

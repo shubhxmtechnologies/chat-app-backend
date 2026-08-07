@@ -31,7 +31,7 @@ const messageSchema = new Schema<IMessage>(
             type: String,
             trim: true,
             minlength: 1,
-            maxlength: 5000,
+            maxlength: 1000,
 
             default: null,
 
@@ -40,23 +40,25 @@ const messageSchema = new Schema<IMessage>(
                     const doc = this as IMessage;
 
                     if (doc.messageType === "text") {
-                        return (
-                            typeof value === "string" &&
-                            value.trim().length > 0
-                        );
+                        if (typeof value !== "string" || value.trim().length === 0) {
+                            return false;
+                        }
+                        const words = value.trim().split(/\s+/).filter(Boolean);
+                        return words.length <= 200 && value.trim().length <= 1000;
                     }
 
                     return value === null;
                 },
 
                 message:
-                    "Text messages require text. Media messages must not contain text.",
+                    "Text messages must be between 1 and 1000 characters and at most 200 words. Media messages must not contain text.",
             },
         },
 
         mediaUrl: {
             type: String,
             default: null,
+            maxlength: 500,
             validate: {
                 validator: function (value: string | null) {
                     const doc = this as IMessage;
@@ -78,6 +80,7 @@ const messageSchema = new Schema<IMessage>(
         mediaPublicId: {
             type: String,
             default: null,
+            maxlength: 255,
             validate: {
                 validator: function (value: string | null) {
                     const doc = this as IMessage;
@@ -135,6 +138,7 @@ const messageSchema = new Schema<IMessage>(
         clientMessageId: {
             type: String,
             default: null,
+            maxlength: 100,
         },
         deletedFor: {
             type: [

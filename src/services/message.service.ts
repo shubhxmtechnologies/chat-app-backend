@@ -8,7 +8,7 @@ import { deleteAsset } from "./cloudinary.service.js";
 
 const DELETE_FOR_EVERYONE_WINDOW_MS =
     15 * 60 * 1000;
-const MAX_BATCH_MESSAGES = 50;
+const MAX_BATCH_MESSAGES = 20;
 
 interface BatchMessageInput {
     chatId: string;
@@ -42,16 +42,24 @@ export const validateTextMessage = (
 
     const normalized = text.trim();
 
-    if (!normalized) {
+    if (!normalized || normalized.length === 0) {
         throw new AppError(
             "Message cannot be empty",
             400
         );
     }
 
-    if (normalized.length > 5000) {
+    if (normalized.length > 1000) {
         throw new AppError(
-            "Message is too long",
+            "Message cannot exceed 1000 characters",
+            400
+        );
+    }
+
+    const words = normalized.split(/\s+/).filter(Boolean);
+    if (words.length > 200) {
+        throw new AppError(
+            "Message cannot exceed 200 words",
             400
         );
     }

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { User } from "../models/user.model.js";
+import { User, DEFAULT_AVATAR_URL } from "../models/user.model.js";
 
 import { asyncHandler } from "../utils/asyncHandler.util.js";
 import { AppError } from "../utils/appError.util.js";
@@ -122,7 +122,7 @@ export const deleteAvatar = asyncHandler(
             throw new AppError("You don't have an avatar to delete", 400);
         }
 
-        user.avatarUrl = null;
+        user.avatarUrl = DEFAULT_AVATAR_URL;
         user.avatarPublicId = null;
 
         recordFieldChange(user as any, "avatar");
@@ -458,7 +458,7 @@ export const searchUsers = asyncHandler(
 
         const q = req.query.q;
 
-        if (typeof q !== "string" || q.trim().length < 2 || q.trim().length > 50) {
+        if (typeof q !== "string" || q.trim().length < 1 || q.trim().length > 14) {
             res.status(200).json({
                 success: true,
                 users: [],
