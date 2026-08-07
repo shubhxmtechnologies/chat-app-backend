@@ -16,6 +16,35 @@ import {
 
 import mongoose from "mongoose";
 import { normalizeUsername } from "../utils/username.util.js";
+import { 
+    updateNameSchema, 
+    updateEmailSchema, 
+    changePasswordSchema, 
+    updateBioSchema 
+} from "../validators/profile.validator.js";
+import type { IUser } from "../types/user.types.js";
+import type { Document } from "mongoose";
+import bcrypt from "bcryptjs";
+
+const FIELD_CHANGE_LIMIT = 2;
+const FIELD_CHANGE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // 2 weeks
+
+function checkFieldChangeLimit(user: IUser & Document, field: string): void {
+    const cutoff = new Date(Date.now() - FIELD_CHANGE_WINDOW_MS);
+    const recentChanges = user.fieldChangeLog.filter(
+        (entry) => entry.field === field && entry.changedAt > cutoff
+    );
+    if (recentChanges.length >= FIELD_CHANGE_LIMIT) {
+        throw new AppError(
+            `You can only change ${field} ${FIELD_CHANGE_LIMIT} times every 2 weeks.`,
+            429
+        );
+    }
+}
+
+function recordFieldChange(user: IUser & Document, field: string): void {
+    user.fieldChangeLog.push({ field, changedAt: new Date() });
+}
 
 export const uploadAvatar = asyncHandler(
     async (req: Request, res: Response) => {
@@ -40,7 +69,8 @@ export const uploadAvatar = asyncHandler(
         if (!user) {
             throw new AppError("User not found", 404);
         }
-
+        
+        checkFieldChangeLimit(user as any, "avatar");
 
         const previousAvatar = user.avatarPublicId;
 
@@ -52,6 +82,8 @@ export const uploadAvatar = asyncHandler(
 
         user.avatarUrl = upload.secureUrl;
         user.avatarPublicId = upload.publicId;
+        
+        recordFieldChange(user as any, "avatar");
         await user.save();
 
         if (
@@ -68,6 +100,45 @@ export const uploadAvatar = asyncHandler(
     }
 );
 
+export const deleteAvatar = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        checkFieldChangeLimit(user as any, "avatar");
+
+        const previousAvatar = user.avatarPublicId;
+        
+        if (!previousAvatar) {
+            throw new AppError("You don't have an avatar to delete", 400);
+        }
+
+        user.avatarUrl = null;
+        user.avatarPublicId = null;
+
+        recordFieldChange(user as any, "avatar");
+        await user.save();
+        
+        await deleteAsset(previousAvatar, "image").catch((err) => {
+            console.error("Failed to delete avatar from cloudinary:", err);
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Avatar deleted successfully",
+        });
+    }
+);
+
 export const updateBio = asyncHandler(
     async (req: Request, res: Response) => {
         const userId = req.user?.userId;
@@ -79,23 +150,16 @@ export const updateBio = asyncHandler(
             );
         }
 
-        const { bio } = req.body;
-
-        if (typeof bio !== "string") {
+        const parsed = updateBioSchema.safeParse(req.body);
+        
+        if (!parsed.success) {
             throw new AppError(
-                "Bio must be a string",
+                parsed.error.issues[0]?.message ?? "Invalid bio data",
                 400
             );
         }
-
-        const normalizedBio = bio.trim();
-
-        if (normalizedBio.length > 200) {
-            throw new AppError(
-                "Bio cannot exceed 200 characters",
-                400
-            );
-        }
+        
+        const normalizedBio = parsed.data.bio?.trim() || "";
 
         const user = await User.findById(userId);
 
@@ -111,6 +175,9 @@ export const updateBio = asyncHandler(
                 ? null
                 : normalizedBio;
 
+        checkFieldChangeLimit(user as any, "bio");
+        recordFieldChange(user as any, "bio");
+        
         await user.save();
 
         res.status(200).json({
@@ -120,72 +187,133 @@ export const updateBio = asyncHandler(
     }
 );
 
-export const updateUsername = asyncHandler(
+export const updateName = asyncHandler(
     async (req: Request, res: Response) => {
         const userId = req.user?.userId;
 
         if (!userId) {
-            throw new AppError(
-                "Unauthorized",
-                401
-            );
+            throw new AppError("Unauthorized", 401);
         }
 
-        const { username } = req.body;
-
-        if (typeof username !== "string") {
+        const parsed = updateNameSchema.safeParse(req.body);
+        if (!parsed.success) {
             throw new AppError(
-                "Username is required",
+                parsed.error.issues[0]?.message ?? "Invalid name data",
                 400
             );
         }
 
-        const normalizedUsername = normalizeUsername(username)
-
         const user = await User.findById(userId);
-
         if (!user) {
-            throw new AppError(
-                "User not found",
-                404
-            );
+            throw new AppError("User not found", 404);
         }
 
-        if (user.usernameLocked) {
-            throw new AppError(
-                "Username can only be changed once.",
-                403
-            );
-        }
+        checkFieldChangeLimit(user as any, "name");
 
-        const existingUser =
-            await User.findOne({
-                username: normalizedUsername,
-            });
+        user.name = {
+            firstName: parsed.data.firstName,
+            lastName: parsed.data.lastName ?? null,
+        };
 
-        if (
-            existingUser &&
-            existingUser._id.toString() !==
-            userId
-        ) {
-            throw new AppError(
-                "This username is already taken.",
-                409
-            );
-        }
-
-        user.username = normalizedUsername;
-        user.usernameLocked = true;
-
+        recordFieldChange(user as any, "name");
         await user.save();
 
         res.status(200).json({
             success: true,
-
-            username: user.username,
+            name: user.name,
         });
     }
 );
+
+export const updateEmail = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const parsed = updateEmailSchema.safeParse(req.body);
+        if (!parsed.success) {
+            throw new AppError(
+                parsed.error.issues[0]?.message ?? "Invalid email data",
+                400
+            );
+        }
+
+        const normalizedEmail = parsed.data.email.trim().toLowerCase();
+
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        if (user.email === normalizedEmail) {
+            throw new AppError("This is already your email", 400);
+        }
+
+        checkFieldChangeLimit(user as any, "email");
+
+        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (existingUser) {
+            throw new AppError("This email is already taken", 409);
+        }
+
+        user.email = normalizedEmail;
+        
+        recordFieldChange(user as any, "email");
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            email: user.email,
+        });
+    }
+);
+
+export const changePassword = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const parsed = changePasswordSchema.safeParse(req.body);
+        if (!parsed.success) {
+            throw new AppError(
+                parsed.error.issues[0]?.message ?? "Invalid password data",
+                400
+            );
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        checkFieldChangeLimit(user as any, "password");
+
+        const isMatch = await bcrypt.compare(parsed.data.currentPassword, user.password);
+        if (!isMatch) {
+            throw new AppError("Incorrect current password", 401);
+        }
+
+        // The pre("save") hook will hash this new password
+        user.password = parsed.data.newPassword;
+        
+        recordFieldChange(user as any, "password");
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Password changed successfully",
+        });
+    }
+);
+
+
+
 
 
 export const blockUser = asyncHandler(
@@ -274,6 +402,52 @@ export const unblockUser = asyncHandler(
     }
 );
 
+export const getBlockedUsers = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const user = await User.findById(currentUserId)
+            .populate("blockedUsers", "username avatarUrl name")
+            .lean();
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        res.status(200).json({
+            success: true,
+            blockedUsers: user.blockedUsers,
+        });
+    }
+);
+
+export const getProfile = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const user = await User.findById(currentUserId)
+            .select("-password -refreshToken -fieldChangeLog")
+            .lean();
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        res.status(200).json({
+            success: true,
+            user,
+        });
+    }
+);
+
 export const searchUsers = asyncHandler(
     async (req: Request, res: Response) => {
         const currentUserId = req.user?.userId;
@@ -284,16 +458,12 @@ export const searchUsers = asyncHandler(
 
         const q = req.query.q;
 
-        try {
-            if (typeof q !== "string" || q.trim().length < 2 || q.trim().length > 50) {
-                res.status(200).json({
-                    success: true,
-                    users: [],
-                });
-                return;
-            }
-        } catch (error) {
-            throw new AppError("Invalid search query", 400);
+        if (typeof q !== "string" || q.trim().length < 2 || q.trim().length > 50) {
+            res.status(200).json({
+                success: true,
+                users: [],
+            });
+            return;
         }
 
         const pattern = new RegExp(escapeRegex(q.trim()), "i");
@@ -312,7 +482,7 @@ export const searchUsers = asyncHandler(
             blockedUsers: { $ne: currentUserId },
             username: pattern,
         })
-            .select("username avatarUrl")
+            .select("username avatarUrl name")
             .limit(3);
 
         res.status(200).json({

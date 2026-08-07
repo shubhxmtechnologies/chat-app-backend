@@ -6,17 +6,38 @@ import {
     blockUser,
     unblockUser,
 } from "../controllers/user.controller.js";
-import { updateBio, updateUsername, uploadAvatar } from "../controllers/user.controller.js";
+import { 
+    updateBio, 
+    uploadAvatar,
+    updateName,
+    updateEmail,
+    changePassword,
+    deleteAvatar,
+    getBlockedUsers,
+    getProfile
+} from "../controllers/user.controller.js";
 import { searchUsers } from "../controllers/user.controller.js";
 import { searchRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
+
+router.get(
+    "/me",
+    authenticate,
+    getProfile
+);
 
 router.patch(
     "/me/avatar",
     authenticate,
     upload.single("avatar"),
     uploadAvatar
+);
+
+router.delete(
+    "/me/avatar",
+    authenticate,
+    deleteAvatar
 );
 
 router.patch(
@@ -26,9 +47,21 @@ router.patch(
 );
 
 router.patch(
-    "/me/username",
+    "/me/name",
     authenticate,
-    updateUsername
+    updateName
+);
+
+router.patch(
+    "/me/email",
+    authenticate,
+    updateEmail
+);
+
+router.patch(
+    "/me/password",
+    authenticate,
+    changePassword
 );
 
 router.post(
@@ -42,6 +75,13 @@ router.post(
     authenticate,
     unblockUser
 );
+
+router.get(
+    "/me/blocked",
+    authenticate,
+    getBlockedUsers
+);
+
 router.get(
     "/search",
     authenticate,

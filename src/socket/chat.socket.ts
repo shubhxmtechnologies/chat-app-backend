@@ -82,6 +82,18 @@ export const registerChatHandlers = (
         }
     });
 
+    // LEAVE CHAT
+    socket.on("leave_chat", (chatId: string) => {
+        if (
+            typeof chatId !== "string" ||
+            !joinedChats.has(chatId)
+        ) {
+            return;
+        }
+
+        socket.leave(chatId);
+        joinedChats.delete(chatId);
+    });
 
     // SEND MESSAGE
     socket.on(
@@ -369,5 +381,13 @@ export const registerChatHandlers = (
                 chatId,
                 userId: socket.data.user.userId,
             });
+    });
+
+    // CLEANUP on disconnect
+    socket.on("disconnect", () => {
+        for (const chatId of joinedChats) {
+            socket.leave(chatId);
+        }
+        joinedChats.clear();
     });
 };

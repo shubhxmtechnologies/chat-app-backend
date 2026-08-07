@@ -199,6 +199,10 @@ export const createMessage = async ({
     }
 
     chat.lastMessage = message._id;
+    
+    if (chat.deletedFor && chat.deletedFor.length > 0) {
+        chat.deletedFor = [];
+    }
 
     await chat.save();
 
@@ -281,6 +285,7 @@ export const getUnreadCount = async (
         chat: chatId,
         sender: { $ne: userId },
         status: { $ne: "seen" },
+        deletedFor: { $ne: userId },
     });
 };
 
@@ -401,6 +406,10 @@ export const getUnreadCountsForUser = async (
 
                 status: {
                     $ne: "seen",
+                },
+
+                deletedFor: {
+                    $ne: new mongoose.Types.ObjectId(userId),
                 },
             },
         },

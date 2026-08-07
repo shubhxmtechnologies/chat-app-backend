@@ -32,6 +32,15 @@ const chatSchema = new Schema<IChat>(
             type: String,
             required: true,
         },
+        deletedFor: {
+            type: [
+                {
+                    type: Schema.Types.ObjectId,
+                    ref: "User",
+                },
+            ],
+            default: [],
+        },
     },
     {
         timestamps: true,

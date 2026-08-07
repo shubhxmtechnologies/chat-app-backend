@@ -1,4 +1,15 @@
 import type { Types } from "mongoose";
+
+export interface IUserName {
+    firstName: string;
+    lastName: string | null;
+}
+
+export interface IFieldChange {
+    field: string;
+    changedAt: Date;
+}
+
 export interface IUser {
     username: string;
     email: string;
@@ -6,14 +17,16 @@ export interface IUser {
 
     refreshToken: string | null;
 
+    name: IUserName;
+    
     avatarUrl: string | null;
     avatarPublicId: string | null;
 
     bio: string | null;
 
-    usernameLocked: boolean;
-
     lastSeenAt: Date | null;
 
     blockedUsers: Types.ObjectId[];
+    
+    fieldChangeLog: IFieldChange[];
 }

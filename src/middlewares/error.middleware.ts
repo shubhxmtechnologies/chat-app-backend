@@ -13,7 +13,7 @@ export const errorHandler = (
     res: Response,
     next: NextFunction
 ): void => {
-    console.log(err);
+    console.error(err);
 
     if (res.headersSent) {
         return next(err);

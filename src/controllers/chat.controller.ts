@@ -8,7 +8,8 @@ import {
 import mongoose from "mongoose";
 
 import { User } from "../models/user.model.js";
-import { isBlockedEitherWay,getBlockDirection } from "../services/user.service.js";
+import { isBlockedEitherWay, getBlockDirection } from "../services/user.service.js";
+import { deleteChatForMe, deleteChatForEveryone } from "../services/chat.service.js";
 
 
 export const createOrGetChat = asyncHandler(
@@ -84,6 +85,12 @@ export const createOrGetChat = asyncHandler(
         });
 
         if (existingChat) {
+            if (existingChat.deletedFor.includes(new mongoose.Types.ObjectId(currentUserId))) {
+                await Chat.updateOne(
+                    { _id: existingChat._id },
+                    { $pull: { deletedFor: currentUserId } }
+                );
+            }
             res.status(200).json({
                 success: true,
                 chat: existingChat,
@@ -129,6 +136,12 @@ export const createOrGetChat = asyncHandler(
                     });
 
                 if (existingChat) {
+                    if (existingChat.deletedFor.includes(new mongoose.Types.ObjectId(currentUserId))) {
+                        await Chat.updateOne(
+                            { _id: existingChat._id },
+                            { $pull: { deletedFor: currentUserId } }
+                        );
+                    }
                     res.status(200).json({
                         success: true,
                         chat: existingChat,
@@ -152,16 +165,17 @@ export const getUserChats = asyncHandler(
             throw new AppError("Unauthorized", 401);
         }
 
-        // Get only chats this user participates in
+        // Get only chats this user participates in and hasn't deleted for themselves
         const chats = await Chat.find({
             participants: currentUserId,
+            deletedFor: { $ne: currentUserId },
         })
             .sort({
                 updatedAt: -1,
             })
             .populate({
                 path: "participants",
-                select: "username avatarUrl lastSeenAt",
+                select: "username avatarUrl lastSeenAt name",
             })
             .populate({
                 path: "lastMessage",
@@ -200,6 +214,60 @@ export const getUserChats = asyncHandler(
         res.status(200).json({
             success: true,
             chats: chatsWithUnreadCount,
+        });
+    }
+);
+
+export const deleteChatForMeHandler = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+        const { chatId } = req.params;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+        
+        if (typeof chatId !== "string") {
+            throw new AppError("Invalid chat ID", 400);
+        }
+
+        const chat = await deleteChatForMe(chatId, currentUserId);
+
+        const io = req.app.get("io");
+        io.to(`user:${currentUserId}`).emit("chat_deleted_for_me", { chatId });
+
+        res.status(200).json({
+            success: true,
+            message: "Chat deleted for you",
+        });
+    }
+);
+
+export const deleteChatForEveryoneHandler = asyncHandler(
+    async (req, res) => {
+        const currentUserId = req.user?.userId;
+        const { chatId } = req.params;
+
+        if (!currentUserId) {
+            throw new AppError("Unauthorized", 401);
+        }
+        
+        if (typeof chatId !== "string") {
+            throw new AppError("Invalid chat ID", 400);
+        }
+
+        const chat = await deleteChatForEveryone(chatId, currentUserId);
+
+        const io = req.app.get("io");
+
+        // Notify all participants
+        for (const participantId of chat.participants) {
+            io.to(`user:${participantId.toString()}`).emit("chat_deleted_for_everyone", { chatId });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Chat deleted for everyone",
         });
     }
 );

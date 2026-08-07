@@ -1,4 +1,3 @@
-const DUMMY_PASSWORD_HASH = "$2b$12$.7TkQ6nMiPj6k8acLZ9UjuXQ/wddHeIYyI3aZsRDk9nE.IbkUcvSS"
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import type {
@@ -17,6 +16,8 @@ import { hashToken } from "../utils/token.util.js";
 import { envConfig } from "../config/env.js";
 import { loginSchema, registerSchema } from "../validators/auth.validator.js";
 import { normalizeUsername } from "../utils/username.util.js";
+
+const DUMMY_PASSWORD_HASH = "$2b$12$.7TkQ6nMiPj6k8acLZ9UjuXQ/wddHeIYyI3aZsRDk9nE.IbkUcvSS"
 
 
 // ----------------------------------------------------
@@ -63,7 +64,7 @@ export const register = asyncHandler(
             );
         }
 
-        const { username, email, password } = parsed.data;
+        const { username, email, password, firstName, lastName, bio } = parsed.data;
 
         const normalizedUsername = normalizeUsername(username);
         const normalizedEmail = String(email).trim().toLowerCase();
@@ -90,6 +91,11 @@ export const register = asyncHandler(
             username: normalizedUsername,
             email: normalizedEmail,
             password,
+            name: {
+                firstName,
+                lastName: lastName ?? null,
+            },
+            bio: bio?.trim() || null,
             refreshToken: null,
         });
 
@@ -125,7 +131,9 @@ export const register = asyncHandler(
                 id: userId,
                 username: user.username,
                 email: user.email,
+                name: user.name,
                 avatarUrl: user.avatarUrl,
+                bio: user.bio ?? null,
             },
         });
     }
@@ -213,7 +221,9 @@ export const login = asyncHandler(
                 id: userId,
                 username: user.username,
                 email: user.email,
+                name: user.name,
                 avatarUrl: user.avatarUrl,
+                bio: user.bio ?? null,
             }
         });
     }
@@ -309,10 +319,12 @@ export const refresh = asyncHandler(
             success: true,
             accessToken,
             user: {
-                id: user._id,
+                id: user._id.toString(),
                 username: user.username,
                 email: user.email,
+                name: user.name,
                 avatarUrl: user.avatarUrl,
+                bio: user.bio ?? null,
             }
         });
     }

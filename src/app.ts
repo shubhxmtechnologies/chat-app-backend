@@ -67,7 +67,7 @@ app.use((req, res) => {
         success: false,
         message: "Route not found",
         route: req.originalUrl,
-        method:req.method
+        method: req.method
     });
 });
 

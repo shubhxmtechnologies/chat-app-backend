@@ -24,6 +24,21 @@ const userSchema = new Schema<IUser>(
             type: String,
             required: true,
         },
+        
+        name: {
+            firstName: {
+                type: String,
+                required: true,
+                trim: true,
+                maxlength: 50,
+            },
+            lastName: {
+                type: String,
+                default: null,
+                trim: true,
+                maxlength: 50,
+            },
+        },
 
         refreshToken: {
             type: String,
@@ -46,10 +61,6 @@ const userSchema = new Schema<IUser>(
             maxlength: 200,
         },
 
-        usernameLocked: {
-            type: Boolean,
-            default: false,
-        },
         lastSeenAt: {
             type: Date,
             default: null,
@@ -59,6 +70,15 @@ const userSchema = new Schema<IUser>(
                 {
                     type: Schema.Types.ObjectId,
                     ref: "User",
+                },
+            ],
+            default: [],
+        },
+        fieldChangeLog: {
+            type: [
+                {
+                    field: { type: String, required: true },
+                    changedAt: { type: Date, required: true },
                 },
             ],
             default: [],
