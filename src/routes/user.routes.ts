@@ -16,7 +16,7 @@ import {
     getBlockedUsers,
     getProfile
 } from "../controllers/user.controller.js";
-import { searchUsers } from "../controllers/user.controller.js";
+import { searchUsers, toggleGlobalMute, toggleChatMute } from "../controllers/user.controller.js";
 import { searchRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
@@ -80,6 +80,18 @@ router.get(
     "/me/blocked",
     authenticate,
     getBlockedUsers
+);
+
+router.patch(
+    "/me/mute/global",
+    authenticate,
+    toggleGlobalMute
+);
+
+router.post(
+    "/me/mute/chat/:chatId",
+    authenticate,
+    toggleChatMute
 );
 
 router.get(

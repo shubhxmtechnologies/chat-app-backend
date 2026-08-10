@@ -103,6 +103,7 @@ export const registerChatHandlers = (
                 chatId: string;
                 text: string;
                 clientMessageId?: string;
+                replyTo?: string;
             },
             ack: (response: {
                 success: boolean;
@@ -166,6 +167,7 @@ export const registerChatHandlers = (
                     senderId,
                     text,
                     ...(clientMessageId && { clientMessageId }),
+                    ...(data.replyTo && { replyTo: data.replyTo }),
                 });
 
                 const chat = await Chat.findById(chatId);
@@ -206,39 +208,6 @@ export const registerChatHandlers = (
                     message
                 );
                 io.to(`user:${senderId}`).emit("receive_message", message);
-                /*
-                 * Recipient has at least one connected socket.
-                 */
-                if (isUserOnline(recipientId)) {
-                    const deliveredAt = new Date();
-
-                    await Message.updateOne(
-                        {
-                            _id: message._id,
-                            status: "sent",
-                        },
-                        {
-                            $set: {
-                                status: "delivered",
-                                deliveredAt,
-                            },
-                        }
-                    );
-
-                    /*
-                     * Tell ALL sender devices/tabs,
-                     * not only the socket that sent it.
-                     */
-                    io.to(`user:${senderId}`).emit(
-                        "message_delivered",
-                        {
-                            messageId:
-                                message._id.toString(),
-                            deliveredAt,
-                        }
-                    );
-                }
-
                 ack({
                     success: true,
                     message,
@@ -300,22 +269,12 @@ export const registerChatHandlers = (
                         _id: { $in: messageIds },
                         status: { $ne: "seen" },
                     },
-                    [
-                        {
-                            $set: {
-                                status: "seen",
-
-                                seenAt,
-
-                                deliveredAt: {
-                                    $ifNull: [
-                                        "$deliveredAt",
-                                        seenAt,
-                                    ],
-                                },
-                            },
+                    {
+                        $set: {
+                            status: "seen",
+                            seenAt,
                         },
-                    ]
+                    }
                 );
 
                 const senderIds = new Set(
@@ -330,9 +289,25 @@ export const registerChatHandlers = (
                         messageIds: messageIds.map((id) =>
                             id.toString()
                         ),
+                        clientMessageIds: unseenMessages
+                            .map((m) => m.clientMessageId)
+                            .filter(Boolean),
                         seenAt,
+                        markedBy: userId,
                     });
                 }
+
+                io.to(`user:${userId}`).emit("message_seen", {
+                    chatId,
+                    messageIds: messageIds.map((id) =>
+                        id.toString()
+                    ),
+                    clientMessageIds: unseenMessages
+                        .map((m) => m.clientMessageId)
+                        .filter(Boolean),
+                    seenAt,
+                    markedBy: userId,
+                });
             } catch (error) {
                 console.error("mark_seen error:", error);
             }

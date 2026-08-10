@@ -23,15 +23,6 @@ export const MEDIA_LIMITS = {
         ],
     },
 
-    sticker: {
-        maxSize: 1 * 1024 * 1024, // 1 MB
-
-        allowedMimeTypes: [
-            "image/png",
-            "image/webp",
-        ],
-    },
-
     voiceNote: {
         maxSize: 10 * 1024 * 1024, // 10 MB
         maxDurationSeconds:120,
@@ -41,6 +32,9 @@ export const MEDIA_LIMITS = {
             "audio/ogg",
             "audio/webm",
             "audio/wav",
+            "video/webm",
+            "video/x-matroska",
+            "audio/x-matroska",
         ],
     },
 } as const;
@@ -84,12 +78,6 @@ export const MESSAGE_MEDIA = {
         folder: "messages/images",
         resourceType: "image",
         validation: MEDIA_LIMITS.image,
-    },
-
-    sticker: {
-        folder: "messages/stickers",
-        resourceType: "image",
-        validation: MEDIA_LIMITS.sticker,
     },
 
     voice: {

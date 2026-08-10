@@ -10,7 +10,6 @@ import {
 } from "../utils/jwt.util.js";
 
 import {
-    markPendingAsDelivered,
 } from "../services/message.service.js";
 
 import { registerChatHandlers } from "./chat.socket.js";
@@ -18,6 +17,7 @@ import { registerChatHandlers } from "./chat.socket.js";
 import {
     setUserOnline,
     setUserOffline,
+    isUserOnline
 } from "./onlineUsers.js";
 
 import { getContactIds } from "../services/chat.service.js";
@@ -28,9 +28,9 @@ interface SocketData {
 
 export const setupSocket = (httpServer: HttpServer): Server => {
     const io = new Server<
-        Record<string, never>,
-        Record<string, never>,
-        Record<string, never>,
+        any,
+        any,
+        any,
         SocketData
     >(httpServer, {
         cors: {
@@ -71,34 +71,36 @@ export const setupSocket = (httpServer: HttpServer): Server => {
         if (becameOnline) {
             const contactIds = await getContactIds(userId);
 
+            const currentlyOnlineContacts: string[] = [];
+
             for (const contactId of contactIds) {
+                if (isUserOnline(contactId.toString())) {
+                    currentlyOnlineContacts.push(contactId.toString());
+                }
+
                 io.to(`user:${contactId}`).emit("user_online", {
                     userId,
                 });
             }
-        }
 
-        try {
-            const pendingMessages =
-                await markPendingAsDelivered(userId);
-
-            for (const {
-                message,
-                deliveredAt,
-            } of pendingMessages) {
-                io.to(
-                    `user:${message.sender.toString()}`
-                ).emit("message_delivered", {
-                    messageId: message._id.toString(),
-                    deliveredAt,
-                });
+            if (currentlyOnlineContacts.length > 0) {
+                socket.emit("initial_online_users", currentlyOnlineContacts);
             }
-        } catch (error) {
-            console.error(
-                "Pending delivery update failed:",
-                error
-            );
+        } else {
+            // Even if they are already online on another device, send them their online contacts for this new connection
+            const contactIds = await getContactIds(userId);
+            const currentlyOnlineContacts: string[] = [];
+            for (const contactId of contactIds) {
+                if (isUserOnline(contactId.toString())) {
+                    currentlyOnlineContacts.push(contactId.toString());
+                }
+            }
+            if (currentlyOnlineContacts.length > 0) {
+                socket.emit("initial_online_users", currentlyOnlineContacts);
+            }
         }
+
+
 
         registerChatHandlers(io, socket);
 

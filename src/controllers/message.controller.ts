@@ -83,7 +83,7 @@ export const sendMediaMessage = asyncHandler(
             throw new AppError("Media file is required", 400);
         }
 
-        const { chatId, messageType, clientMessageId } = req.body;
+        const { chatId, messageType, clientMessageId, replyTo } = req.body;
 
         if (clientMessageId !== undefined && (typeof clientMessageId !== "string" || clientMessageId.length > 100)) {
             throw new AppError("Invalid client message ID", 400);
@@ -95,7 +95,6 @@ export const sendMediaMessage = asyncHandler(
 
         if (
             messageType !== "image" &&
-            messageType !== "sticker" &&
             messageType !== "voice"
         ) {
             throw new AppError("Invalid message type", 400);
@@ -128,7 +127,8 @@ export const sendMediaMessage = asyncHandler(
                 messageType,
                 mediaUrl: upload.secureUrl,
                 mediaPublicId: upload.publicId,
-                clientMessageId
+                clientMessageId,
+                replyTo
             });
 
             try {

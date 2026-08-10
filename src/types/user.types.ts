@@ -28,5 +28,9 @@ export interface IUser {
 
     blockedUsers: Types.ObjectId[];
     
+    globalMute: boolean;
+    
+    mutedChats: Types.ObjectId[];
+    
     fieldChangeLog: IFieldChange[];
 }

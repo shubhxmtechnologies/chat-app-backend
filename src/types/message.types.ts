@@ -2,13 +2,11 @@ import type { Types } from "mongoose";
 
 export type MessageStatus =
     | "sent"
-    | "delivered"
     | "seen";
 
 export type MessageType =
     | "text"
     | "image"
-    | "sticker"
     | "voice";
 
 export interface IMessage {
@@ -22,11 +20,11 @@ export interface IMessage {
 
     mediaUrl: string | null;
 
+    replyTo: Types.ObjectId | null;
+
     mediaPublicId: string | null;
 
     status: MessageStatus;
-
-    deliveredAt: Date | null;
 
     seenAt: Date | null;
 

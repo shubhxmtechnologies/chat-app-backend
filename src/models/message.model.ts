@@ -21,7 +21,6 @@ const messageSchema = new Schema<IMessage>(
             enum: [
                 "text",
                 "image",
-                "sticker",
                 "voice",
             ],
             default: "text",
@@ -38,6 +37,10 @@ const messageSchema = new Schema<IMessage>(
             validate: {
                 validator: function (value: string | null) {
                     const doc = this as IMessage;
+
+                    if (doc.isDeletedForEveryone) {
+                        return value === null;
+                    }
 
                     if (doc.messageType === "text") {
                         if (typeof value !== "string" || value.trim().length === 0) {
@@ -63,6 +66,10 @@ const messageSchema = new Schema<IMessage>(
                 validator: function (value: string | null) {
                     const doc = this as IMessage;
 
+                    if (doc.isDeletedForEveryone) {
+                        return value === null;
+                    }
+
                     if (doc.messageType === "text") {
                         return value === null;
                     }
@@ -76,6 +83,11 @@ const messageSchema = new Schema<IMessage>(
                     "Media messages require a media URL. Text messages must not contain one.",
             },
         },
+        replyTo: {
+            type: Schema.Types.ObjectId,
+            ref: "Message",
+            default: null,
+        },
 
         mediaPublicId: {
             type: String,
@@ -84,6 +96,10 @@ const messageSchema = new Schema<IMessage>(
             validate: {
                 validator: function (value: string | null) {
                     const doc = this as IMessage;
+
+                    if (doc.isDeletedForEveryone) {
+                        return value === null;
+                    }
 
                     if (doc.messageType === "text") {
                         return value === null;
@@ -102,15 +118,9 @@ const messageSchema = new Schema<IMessage>(
             type: String,
             enum: [
                 "sent",
-                "delivered",
                 "seen",
             ],
             default: "sent",
-        },
-
-        deliveredAt: {
-            type: Date,
-            default: null,
         },
 
         seenAt: {

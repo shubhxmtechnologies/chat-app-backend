@@ -83,6 +83,19 @@ const userSchema = new Schema<IUser>(
             ],
             default: [],
         },
+        globalMute: {
+            type: Boolean,
+            default: false,
+        },
+        mutedChats: {
+            type: [
+                {
+                    type: Schema.Types.ObjectId,
+                    ref: "Chat",
+                },
+            ],
+            default: [],
+        },
         fieldChangeLog: {
             type: [
                 {

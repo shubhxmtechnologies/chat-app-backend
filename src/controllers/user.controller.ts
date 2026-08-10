@@ -491,3 +491,63 @@ export const searchUsers = asyncHandler(
         });
     }
 ); 
+
+export const toggleGlobalMute = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        user.globalMute = !user.globalMute;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            globalMute: user.globalMute,
+        });
+    }
+);
+
+export const toggleChatMute = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+        const chatId = req.params.chatId as string;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        if (!chatId || !mongoose.isValidObjectId(chatId)) {
+            throw new AppError("Invalid chat ID", 400);
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        const chatIndex = user.mutedChats.findIndex((id) => id.toString() === chatId);
+
+        if (chatIndex > -1) {
+            user.mutedChats.splice(chatIndex, 1);
+        } else {
+            user.mutedChats.push(new mongoose.Types.ObjectId(chatId));
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            mutedChats: user.mutedChats,
+        });
+    }
+);

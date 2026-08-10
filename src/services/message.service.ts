@@ -29,6 +29,7 @@ interface CreateMessageInput {
 
     mediaPublicId?: string;
     clientMessageId?: string;
+    replyTo?: string;
 }
 export const validateTextMessage = (
     text: string
@@ -74,7 +75,8 @@ export const createMessage = async ({
     text,
     mediaUrl,
     mediaPublicId,
-    clientMessageId
+    clientMessageId,
+    replyTo,
 }: CreateMessageInput) => {
     if (!mongoose.isValidObjectId(chatId)) {
         throw new AppError(
@@ -180,7 +182,13 @@ export const createMessage = async ({
                 messageType === "text"
                     ? null
                     : (mediaPublicId ?? null),
+
+            replyTo: replyTo ?? null,
         });
+
+        if (replyTo) {
+            await message.populate("replyTo", "text messageType");
+        }
     } catch (error: unknown) {
 
         if (
@@ -207,7 +215,7 @@ export const createMessage = async ({
     }
 
     chat.lastMessage = message._id;
-    
+
     if (chat.deletedFor && chat.deletedFor.length > 0) {
         chat.deletedFor = [];
     }
@@ -217,72 +225,6 @@ export const createMessage = async ({
     return message;
 };
 
-export const markPendingAsDelivered = async (
-    recipientId: string
-) => {
-    if (!mongoose.isValidObjectId(recipientId)) {
-        throw new AppError(
-            "Invalid recipient ID",
-            400
-        );
-    }
-
-    const userChats = await Chat.find({
-        participants: recipientId,
-    })
-        .select("_id")
-        .lean();
-
-    if (userChats.length === 0) {
-        return [];
-    }
-
-    const chatIds = userChats.map(
-        (chat) => chat._id
-    );
-
-    const pendingMessages = await Message.find({
-        chat: {
-            $in: chatIds,
-        },
-        sender: {
-            $ne: new mongoose.Types.ObjectId(
-                recipientId
-            ),
-        },
-        status: "sent",
-    });
-
-    if (pendingMessages.length === 0) {
-        return [];
-    }
-
-    const messageIds = pendingMessages.map(
-        (message) => message._id
-    );
-
-    const deliveredAt = new Date();
-
-    await Message.updateMany(
-        {
-            _id: {
-                $in: messageIds,
-            },
-            status: "sent",
-        },
-        {
-            $set: {
-                status: "delivered",
-                deliveredAt,
-            },
-        }
-    );
-
-    return pendingMessages.map((message) => ({
-        message,
-        deliveredAt,
-    }));
-};
 
 
 export const getUnreadCount = async (
@@ -365,6 +307,7 @@ export const getChatMessages = async (
     }
 
     const messages = await Message.find(filter)
+        .populate("replyTo", "text messageType")
         .sort({
             createdAt: -1,
             _id: -1,
