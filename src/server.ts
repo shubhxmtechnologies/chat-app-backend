@@ -16,7 +16,17 @@ const startServer = async (): Promise<void> => {
         await connectDB();
         startJobScheduler();
         server.listen(envConfig.PORT, () => {
-            console.log(`Server running on port ${envConfig.PORT}`);
+            const currentDateTime = new Intl.DateTimeFormat("en-IN", {
+                timeZone: "Asia/Kolkata",
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+            }).format(new Date());
+
+            console.log(`Server started: ${currentDateTime}`);
         });
     } catch (error) {
         console.error("Failed to start server:", error);
