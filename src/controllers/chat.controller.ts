@@ -204,8 +204,19 @@ export const getUserChats = asyncHandler(
                     )
                     : { blockedByMe: false, blockedByThem: false };
 
+                let lastMessage = chat.lastMessage;
+                if (lastMessage && Array.isArray((lastMessage as any).deletedFor)) {
+                    const isDeletedForUser = (lastMessage as any).deletedFor.some(
+                        (id: any) => id.toString() === currentUserId
+                    );
+                    if (isDeletedForUser) {
+                        lastMessage = null;
+                    }
+                }
+
                 return {
                     ...chat.toObject(),
+                    lastMessage,
                     unreadCount: unreadCounts.get(chat._id.toString()) ?? 0,
                     ...blockStatus,
                 };

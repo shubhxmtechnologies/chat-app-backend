@@ -218,10 +218,17 @@ export const registerChatHandlers = (
                  * This works even when recipient is online
                  * but hasn't opened this specific chat.
                  */
-                io.to(`user:${recipientId}`).emit(
-                    "receive_message",
-                    message
+                const isDeletedForRecipient = message.deletedFor.some(
+                    (id) => id.toString() === recipientId
                 );
+
+                if (!isDeletedForRecipient) {
+                    io.to(`user:${recipientId}`).emit(
+                        "receive_message",
+                        message
+                    );
+                }
+
                 io.to(`user:${senderId}`).emit("receive_message", message);
                 ack({
                     success: true,

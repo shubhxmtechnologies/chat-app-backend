@@ -3,7 +3,7 @@ import { Message } from "../models/message.model.js";
 import { MessageType } from "../types/message.types.js";
 import { AppError } from "../utils/appError.util.js";
 import mongoose from "mongoose";
-import { isBlockedEitherWay } from "./user.service.js";
+import { isBlockedEitherWay, getBlockDirection } from "./user.service.js";
 import { deleteAsset } from "./cloudinary.service.js";
 
 const DELETE_FOR_EVERYONE_WINDOW_MS =
@@ -130,17 +130,19 @@ export const createMessage = async ({
         );
     }
 
-    const blocked = await isBlockedEitherWay(
+    const { blockedByMe, blockedByThem } = await getBlockDirection(
         senderId,
         recipientId
     );
 
-    if (blocked) {
+    if (blockedByMe) {
         throw new AppError(
-            "You cannot send messages to this user",
+            "You cannot send messages to a blocked user",
             403
         );
     }
+
+    const initialDeletedFor = blockedByThem ? [new mongoose.Types.ObjectId(recipientId)] : [];
 
     if (clientMessageId) {
         const existingMessage =
@@ -184,6 +186,7 @@ export const createMessage = async ({
                     : (mediaPublicId ?? null),
 
             replyTo: replyTo ?? null,
+            deletedFor: initialDeletedFor,
         });
 
         if (replyTo) {
