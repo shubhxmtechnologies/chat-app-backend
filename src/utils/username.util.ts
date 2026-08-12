@@ -8,12 +8,13 @@ export const normalizeUsername = (
         .trim()
         .toLowerCase();
 
+    // L6: Range aligned with Zod auth validator (5–14 chars)
     if (
-        normalized.length < 3 ||
-        normalized.length > 30
+        normalized.length < 5 ||
+        normalized.length > 14
     ) {
         throw new AppError(
-            "Username must be between 3 and 30 characters",
+            "Username must be between 5 and 14 characters",
             400
         );
     }

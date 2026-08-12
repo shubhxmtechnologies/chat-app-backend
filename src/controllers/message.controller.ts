@@ -17,13 +17,16 @@ import mongoose from "mongoose";
 
 export const sendMessage = asyncHandler(async (req, res) => {
     const senderId = req.user?.userId;
-    const { chatId, text, clientMessageId } = req.body;
+    const { chatId, text, clientMessageId, replyTo } = req.body;
     if (typeof chatId !== "string" || typeof text !== "string") {
         throw new AppError("Invalid request data", 400);
     }
     if (clientMessageId !== undefined && (typeof clientMessageId !== "string" || clientMessageId.length > 100)) {
         throw new AppError("Invalid client message ID", 400);
     }
+
+    // M4: Validate replyTo as ObjectId if provided
+    const validatedReplyTo = replyTo && mongoose.isValidObjectId(replyTo) ? replyTo : undefined;
 
     if (!senderId) {
         throw new AppError("Unauthorized", 401);
@@ -33,7 +36,8 @@ export const sendMessage = asyncHandler(async (req, res) => {
         chatId,
         senderId,
         text,
-        clientMessageId
+        clientMessageId,
+        ...(validatedReplyTo && { replyTo: validatedReplyTo }),
     });
 
     res.status(201).json({
@@ -293,6 +297,13 @@ export const sendMessageBatch = asyncHandler(
             ) {
                 throw new AppError("Invalid batch message payload", 400);
             }
+        }
+
+        // M8: All messages in a batch must target the same chatId
+        // to prevent cross-chat spam through a single rate-limited request.
+        const uniqueChatIds = new Set(messages.map((m: any) => m.chatId));
+        if (uniqueChatIds.size > 1) {
+            throw new AppError("All batch messages must target the same chat", 400);
         }
         
         const results =

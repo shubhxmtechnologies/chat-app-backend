@@ -15,22 +15,53 @@ export const requireTrustedOrigin = (
     const origin = req.get("origin");
 
     /*
-     * Browser requests made by your frontend should
-     * carry Origin on these POST requests.
+     * Prefer Origin when the browser sends it.
      */
-    if (!origin) {
-        throw new AppError(
-            "Origin header required",
-            403
-        );
+    if (origin) {
+        if (origin !== envConfig.CLIENT_ORIGIN) {
+            throw new AppError(
+                "Invalid request origin",
+                403
+            );
+        }
+
+        return next();
     }
 
-    if (origin !== envConfig.CLIENT_ORIGIN) {
-        throw new AppError(
-            "Invalid request origin",
-            403
-        );
+    /*
+     * Fallback to Referer when Origin is absent.
+     */
+    const referer = req.get("referer");
+
+    if (referer) {
+        try {
+            const refererOrigin = new URL(referer).origin;
+
+            if (
+                refererOrigin !==
+                envConfig.CLIENT_ORIGIN
+            ) {
+                throw new AppError(
+                    "Invalid request origin",
+                    403
+                );
+            }
+
+            return next();
+        } catch {
+            throw new AppError(
+                "Invalid request referer",
+                403
+            );
+        }
     }
 
-    next();
+    /*
+     * Neither Origin nor Referer is present.
+     * Fail closed for these sensitive auth endpoints.
+     */
+    throw new AppError(
+        "Origin or Referer header required",
+        403
+    );
 };

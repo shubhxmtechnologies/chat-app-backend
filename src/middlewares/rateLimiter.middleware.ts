@@ -67,3 +67,16 @@ export const searchRateLimiter = rateLimit({
         message: "You're searching too quickly.",
     },
 });
+
+export const checkAvailabilityLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+
+    message: {
+        success: false,
+        message: "Too many checks. Please try again later.",
+    },
+});

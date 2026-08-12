@@ -380,6 +380,10 @@ export const unblockUser = asyncHandler(
             throw new AppError("Unauthorized", 401);
         }
 
+        // M6: Consistent ObjectId validation (matches blockUser)
+        if (typeof userId !== "string") {
+            throw new AppError("Invalid user ID", 400);
+        }
         if (!mongoose.isValidObjectId(userId)) {
             throw new AppError("Invalid user ID", 400);
         }

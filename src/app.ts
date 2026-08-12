@@ -17,11 +17,29 @@ import chatRoutes from "./routes/chat.routes.js";
 import messageRoutes from "./routes/message.routes.js";
 import userRoutes from "./routes/user.routes.js";
 const app = express();
-app.set("trust proxy", 1);
-app.use(helmet());
+
+// H2: Only trust proxy headers in production (behind a real reverse proxy).
+// In dev, this prevents IP spoofing via X-Forwarded-For to bypass rate limiters.
+if (envConfig.NODE_ENV === "production") {
+    app.set("trust proxy", "loopback, linklocal, uniquelocal");
+}
+
+// L3: Explicit helmet configuration with strict security headers.
+app.use(helmet({
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    permittedCrossDomainPolicies: { permittedPolicies: "none" },
+}));
+
 // --------------------
 // GLOBAL MIDDLEWARES
 // --------------------
+
+app.use(
+    cors({
+        origin: envConfig.CLIENT_ORIGIN,
+        credentials: true,
+    })
+);
 
 app.use(
     express.json({
@@ -31,14 +49,6 @@ app.use(
 
 app.use(cookieParser());
 app.use(sanitizeRequest);
-app.use(
-    cors({
-        origin: envConfig.CLIENT_ORIGIN,
-        credentials: true,
-    })
-);
-
-
 
 app.use(generalRateLimiter);
 
@@ -62,12 +72,11 @@ app.use("/api/users", userRoutes);
 // 404
 // --------------------
 
-app.use((req, res) => {
+// M2: Don't leak route/method in 404 — helps attackers enumerate the API.
+app.use((_req, res) => {
     res.status(404).json({
         success: false,
         message: "Route not found",
-        route: req.originalUrl,
-        method: req.method
     });
 });
 

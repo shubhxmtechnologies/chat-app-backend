@@ -78,8 +78,7 @@ export const register = asyncHandler(
 
         if (existingUser) {
             throw new AppError(
-                "An account with this username or email already exists",
-                409
+                "Email or username already in use.", 409
             );
         }
 
@@ -134,6 +133,8 @@ export const register = asyncHandler(
                 name: user.name,
                 avatarUrl: user.avatarUrl,
                 bio: user.bio ?? null,
+                globalMute: user.globalMute,
+                mutedChats: user.mutedChats,
             },
         });
     }
@@ -224,6 +225,8 @@ export const login = asyncHandler(
                 name: user.name,
                 avatarUrl: user.avatarUrl,
                 bio: user.bio ?? null,
+                globalMute: user.globalMute,
+                mutedChats: user.mutedChats,
             }
         });
     }
@@ -294,26 +297,10 @@ export const refresh = asyncHandler(
                 user._id.toString()
             );
 
-        /*
-         * Rotate refresh token.
-         */
-        const newRefreshToken =
-            signRefreshToken(
-                user._id.toString()
-            );
-
-        user.refreshToken =
-            hashToken(
-                newRefreshToken
-            );
-
-        await user.save();
-
-        res.cookie(
-            REFRESH_COOKIE_NAME,
-            newRefreshToken,
-            refreshCookieOptions
-        );
+        // Intentionally NOT rotating the refresh token on every /refresh request.
+        // This solves the race condition where multiple rapid requests (e.g. fast tab refresh)
+        // would cause a 401 Unauthorized, logging the user out.
+        // The refresh token remains valid until expiry or explicit logout.
 
         res.status(200).json({
             success: true,
@@ -325,6 +312,8 @@ export const refresh = asyncHandler(
                 name: user.name,
                 avatarUrl: user.avatarUrl,
                 bio: user.bio ?? null,
+                globalMute: user.globalMute,
+                mutedChats: user.mutedChats,
             }
         });
     }
@@ -340,6 +329,8 @@ export const logout = asyncHandler(
         const refreshToken =
             req.cookies?.refreshToken;
 
+        let loggedOutUserId: string | null = null;
+
         if (
             typeof refreshToken === "string" &&
             refreshToken
@@ -349,6 +340,8 @@ export const logout = asyncHandler(
                     verifyRefreshToken(
                         refreshToken
                     );
+
+                loggedOutUserId = decoded.userId;
 
                 const tokenHash =
                     hashToken(
@@ -380,10 +373,68 @@ export const logout = asyncHandler(
             refreshCookieBaseOptions
         );
 
+        // H3: Force-disconnect all sockets for this user on logout.
+        if (loggedOutUserId) {
+            try {
+                const io = req.app.get("io");
+                if (io) {
+                    const sockets = await io.in(`user:${loggedOutUserId}`).fetchSockets();
+                    for (const s of sockets) {
+                        s.emit("auth_error", { message: "Logged out" });
+                        s.disconnect(true);
+                    }
+                }
+            } catch {
+                // Socket cleanup is best-effort
+            }
+        }
+
         res.status(200).json({
             success: true,
             message:
                 "Logged out successfully",
+        });
+    }
+);
+
+export const checkUsername = asyncHandler(
+    async (req, res) => {
+        const { username } = req.body;
+
+        if (!username || typeof username !== "string") {
+            throw new AppError("Username is required", 400);
+        }
+
+        const normalizedUsername = normalizeUsername(username);
+
+        const existingUser = await User.exists({
+            username: normalizedUsername,
+        });
+
+        res.status(200).json({
+            success: true,
+            available: !existingUser,
+        });
+    }
+);
+
+export const checkEmail = asyncHandler(
+    async (req, res) => {
+        const { email } = req.body;
+
+        if (!email || typeof email !== "string") {
+            throw new AppError("Email is required", 400);
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const existingUser = await User.exists({
+            email: normalizedEmail,
+        });
+
+        res.status(200).json({
+            success: true,
+            available: !existingUser,
         });
     }
 );

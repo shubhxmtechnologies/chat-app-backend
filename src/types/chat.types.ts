@@ -5,4 +5,5 @@ export interface IChat {
     lastMessage: Types.ObjectId | null;
     participantKey: string;
     deletedFor: Types.ObjectId[];
+    createdBy: Types.ObjectId;
 }

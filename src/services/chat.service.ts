@@ -82,6 +82,19 @@ export const deleteChatForEveryone = async (
 ) => {
     const chat = await getAuthorizedChat(chatId, userId);
 
+    // H5: Only the chat creator can delete for everyone.
+    // For older chats without createdBy, fall back to participants[0].
+    const creatorId = chat.createdBy
+        ? chat.createdBy.toString()
+        : chat.participants[0]?.toString();
+
+    if (creatorId !== userId) {
+        throw new AppError(
+            "Only the chat creator can delete for everyone",
+            403
+        );
+    }
+
     // Get all media messages
     const mediaMessages = await Message.find({
         chat: chatId,

@@ -26,6 +26,19 @@ interface SocketData {
     user: TokenPayload;
 }
 
+// M7: Per-user rate limit tracking that survives socket reconnections.
+// Maps userId -> event type -> array of timestamps.
+const userRateLimits = new Map<string, Map<string, number[]>>();
+
+export const getUserRateLimits = () => userRateLimits;
+
+export const cleanupUserRateLimits = (userId: string) => {
+    userRateLimits.delete(userId);
+};
+
+// H3: Token re-validation interval (5 minutes)
+const TOKEN_REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
+
 export const setupSocket = (httpServer: HttpServer): Server => {
     const io = new Server<
         any,
@@ -37,6 +50,8 @@ export const setupSocket = (httpServer: HttpServer): Server => {
             origin: envConfig.CLIENT_ORIGIN,
             credentials: true,
         },
+        // M5: Limit socket payload size to 10KB — sufficient for text chat messages.
+        maxHttpBufferSize: 10 * 1024,
     });
 
     io.use((socket, next) => {
@@ -62,57 +77,75 @@ export const setupSocket = (httpServer: HttpServer): Server => {
 
         const becameOnline = setUserOnline(
             userId,
-            socket.id
+            socket.id,
+            io
         );
 
         await socket.join(`user:${userId}`);
 
-        // Only notify contacts when user goes 0 → 1 sockets
-        if (becameOnline) {
-            const contactIds = await getContactIds(userId);
-
-            const currentlyOnlineContacts: string[] = [];
-
-            for (const contactId of contactIds) {
-                if (isUserOnline(contactId.toString())) {
-                    currentlyOnlineContacts.push(contactId.toString());
+        // H3: Periodic token re-validation — disconnect if JWT is expired.
+        const revalidationInterval = setInterval(() => {
+            try {
+                const token = socket.handshake.auth?.token;
+                if (typeof token !== "string" || !token) {
+                    socket.emit("auth_error", { message: "Session expired" });
+                    socket.disconnect(true);
+                    return;
                 }
+                verifyAccessToken(token);
+            } catch {
+                socket.emit("auth_error", { message: "Session expired" });
+                socket.disconnect(true);
+            }
+        }, TOKEN_REVALIDATION_INTERVAL_MS);
 
-                io.to(`user:${contactId}`).emit("user_online", {
-                    userId,
-                });
+        // Fetch contacts and send presence updates
+        const contactIds = await getContactIds(userId);
+        const currentlyOnlineContacts: string[] = [];
+
+        for (const contactId of contactIds) {
+            if (isUserOnline(contactId.toString(), io)) {
+                currentlyOnlineContacts.push(contactId.toString());
             }
 
-            if (currentlyOnlineContacts.length > 0) {
-                socket.emit("initial_online_users", currentlyOnlineContacts);
-            }
-        } else {
-            // Even if they are already online on another device, send them their online contacts for this new connection
-            const contactIds = await getContactIds(userId);
-            const currentlyOnlineContacts: string[] = [];
-            for (const contactId of contactIds) {
-                if (isUserOnline(contactId.toString())) {
-                    currentlyOnlineContacts.push(contactId.toString());
-                }
-            }
-            if (currentlyOnlineContacts.length > 0) {
-                socket.emit("initial_online_users", currentlyOnlineContacts);
-            }
+            // Broadcast to all online contacts that this user is online
+            io.to(`user:${contactId}`).emit("user_online", {
+                userId,
+            });
         }
 
+        // Always emit the authoritative list of online contacts to the newly connected user
+        socket.emit("initial_online_users", currentlyOnlineContacts);
 
+        // Allow client to re-request the online users list on reconnection
+        socket.on("get_online_users", async () => {
+            try {
+                const contacts = await getContactIds(userId);
+                const onlineList = contacts.filter((id) => isUserOnline(id.toString(), io));
+                socket.emit("initial_online_users", onlineList);
+            } catch (err) {
+                console.error("Failed to fetch online users for socket:", err);
+            }
+        });
 
         registerChatHandlers(io, socket);
 
         socket.on("disconnect", async () => {
+            // H3: Clear re-validation interval on disconnect
+            clearInterval(revalidationInterval);
+
             const becameOffline = setUserOffline(
                 userId,
-                socket.id
+                socket.id,
+                io
             );
 
             if (!becameOffline) {
                 return;
             }
+
+            // M7: Clean up per-user rate limits when user fully disconnects
+            cleanupUserRateLimits(userId);
 
             const lastSeenAt = new Date();
 
@@ -129,13 +162,13 @@ export const setupSocket = (httpServer: HttpServer): Server => {
                 );
             }
 
-            // Only notify contacts when user goes 1 → 0 sockets
-            const contactIds = await getContactIds(userId);
+            // Notify contacts that user went offline
+            const contacts = await getContactIds(userId);
 
-            for (const contactId of contactIds) {
+            for (const contactId of contacts) {
                 io.to(`user:${contactId}`).emit("user_offline", {
                     userId,
-                    lastSeenAt,
+                    lastSeenAt: lastSeenAt.toISOString(),
                 });
             }
         });

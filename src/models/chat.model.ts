@@ -43,6 +43,12 @@ const chatSchema = new Schema<IChat>(
             ],
             default: [],
         },
+        // H5: Track who created the chat for deletion authorization
+        createdBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
     },
     {
         timestamps: true,

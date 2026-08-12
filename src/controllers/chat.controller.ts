@@ -107,6 +107,7 @@ export const createOrGetChat = asyncHandler(
                 ],
                 participantKey,
                 lastMessage: null,
+                createdBy: canonicalCurrentUserId,
             });
 
             res.status(201).json({

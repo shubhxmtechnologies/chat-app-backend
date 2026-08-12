@@ -7,7 +7,7 @@ import {
     createMessage,
 } from "../services/message.service.js";
 
-import { isUserOnline } from "./onlineUsers.js";
+import { getUserRateLimits } from "./index.js";
 
 import type { TokenPayload } from "../utils/jwt.util.js";
 import { getAuthorizedChat } from "../services/chat.service.js";
@@ -17,11 +17,24 @@ interface SocketData {
     user: TokenPayload;
 }
 
+// M7: Per-user rate limiting that survives reconnections.
+// Uses the server-level Map from socket/index.ts.
 const isRateLimited = (
-    timestamps: number[],
+    userId: string,
+    eventType: string,
     limit: number,
     windowMs: number
 ): boolean => {
+    const allLimits = getUserRateLimits();
+    if (!allLimits.has(userId)) {
+        allLimits.set(userId, new Map());
+    }
+    const userLimits = allLimits.get(userId)!;
+    if (!userLimits.has(eventType)) {
+        userLimits.set(eventType, []);
+    }
+    const timestamps = userLimits.get(eventType)!;
+
     const now = Date.now();
     const cutoff = now - windowMs;
 
@@ -45,16 +58,14 @@ export const registerChatHandlers = (
     io: Server,
     socket: Socket<any, any, any, SocketData>
 ): void => {
-    const messageTimestamps: number[] = [];
-    const typingTimestamps: number[] = [];
-    const joinTimestamps: number[] = [];
-    const seenTimestamps: number[] = [];
+    const userId = socket.data.user.userId;
     const joinedChats = new Set<string>();
     // JOIN CHAT
     socket.on("join_chat", async (chatId: string) => {
         if (
             isRateLimited(
-                joinTimestamps,
+                userId,
+                "join",
                 20,
                 10_000
             )
@@ -70,7 +81,6 @@ export const registerChatHandlers = (
         }
 
         try {
-            const userId = socket.data.user.userId;
             await getAuthorizedChat(chatId, userId);
             await socket.join(chatId);
             joinedChats.add(chatId);
@@ -113,7 +123,8 @@ export const registerChatHandlers = (
         ) => {
             if (
                 isRateLimited(
-                    messageTimestamps,
+                    userId,
+                    "message",
                     60,
                     60_000
                 )
@@ -162,12 +173,16 @@ export const registerChatHandlers = (
                         ? data.clientMessageId
                         : undefined;
 
+                // M3: Validate replyTo as a proper ObjectId before passing to createMessage.
+                const replyTo = data.replyTo && mongoose.isValidObjectId(data.replyTo)
+                    ? data.replyTo : undefined;
+
                 const message = await createMessage({
                     chatId,
                     senderId,
                     text,
                     ...(clientMessageId && { clientMessageId }),
-                    ...(data.replyTo && { replyTo: data.replyTo }),
+                    ...(replyTo && { replyTo }),
                 });
 
                 const chat = await Chat.findById(chatId);
@@ -231,7 +246,8 @@ export const registerChatHandlers = (
         async (chatId: string) => {
             if (
                 isRateLimited(
-                    seenTimestamps,
+                    userId,
+                    "seen",
                     20,
                     10_000
                 )
@@ -239,7 +255,6 @@ export const registerChatHandlers = (
                 return;
             }
             try {
-                const userId = socket.data.user.userId;
                 if (typeof chatId !== "string" || !mongoose.isValidObjectId(chatId)) {
                     return;
                 }
@@ -316,46 +331,27 @@ export const registerChatHandlers = (
 
 
     // TYPING
-    socket.on("typing", (chatId: string) => {
-        if (
-            isRateLimited(
-                typingTimestamps,
-                10,
-                5_000
-            )
-        ) {
-            return;
-        }
+    socket.on("typing", (data: { chatId: string, recipientId: string }) => {
+        if (!data || typeof data.chatId !== "string" || typeof data.recipientId !== "string") return;
+        if (isRateLimited(userId, "typing", 10, 5_000)) return;
+        if (!joinedChats.has(data.chatId)) return;
 
-        if (
-            typeof chatId !== "string" ||
-            !joinedChats.has(chatId)
-        ) {
-            return;
-        }
-
-        socket.to(chatId).emit("user_typing", {
-            chatId,
+        socket.to(`user:${data.recipientId}`).emit("user_typing", {
+            chatId: data.chatId,
             userId: socket.data.user.userId,
         });
     });
 
 
     // STOP TYPING
-    socket.on("stop_typing", (chatId: string) => {
-        if (
-            typeof chatId !== "string" ||
-            !joinedChats.has(chatId)
-        ) {
-            return;
-        }
+    socket.on("stop_typing", (data: { chatId: string, recipientId: string }) => {
+        if (!data || typeof data.chatId !== "string" || typeof data.recipientId !== "string") return;
+        if (!joinedChats.has(data.chatId)) return;
 
-        socket
-            .to(chatId)
-            .emit("user_stop_typing", {
-                chatId,
-                userId: socket.data.user.userId,
-            });
+        socket.to(`user:${data.recipientId}`).emit("user_stop_typing", {
+            chatId: data.chatId,
+            userId: socket.data.user.userId,
+        });
     });
 
     // CLEANUP on disconnect
