@@ -118,7 +118,7 @@ export const setupSocket = (httpServer: HttpServer): Server => {
         socket.emit("initial_online_users", currentlyOnlineContacts);
 
         // Allow client to re-request the online users list on reconnection
-        socket.on("get_online_users", a sync () => {
+        socket.on("get_online_users", async () => {
             try {
                 const contacts = await getContactIds(userId);
                 const onlineList = contacts.filter((id) => isUserOnline(id.toString(), io));
