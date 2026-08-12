@@ -40,13 +40,32 @@ export const getContactIds = async (
         (currentUser?.blockedUsers ?? []).map((id) => id.toString())
     );
 
+    // Find all users in these chats to check if they blocked the current user
+    const participantIds = new Set<string>();
+    for (const chat of userChats) {
+        for (const p of chat.participants) {
+            participantIds.add(p.toString());
+        }
+    }
+
+    const participants = await User.find({
+        _id: { $in: Array.from(participantIds) }
+    }).select("blockedUsers").lean();
+
+    const blockedByThemSet = new Set<string>();
+    for (const p of participants) {
+        if (p.blockedUsers?.some(id => id.toString() === userId)) {
+            blockedByThemSet.add(p._id.toString());
+        }
+    }
+
     const contactIds = new Set<string>();
 
     for (const chat of userChats) {
         for (const participantId of chat.participants) {
             const id = participantId.toString();
 
-            if (id !== userId && !blockedSet.has(id)) {
+            if (id !== userId && !blockedSet.has(id) && !blockedByThemSet.has(id)) {
                 contactIds.add(id);
             }
         }

@@ -214,11 +214,23 @@ export const getUserChats = asyncHandler(
                     }
                 }
 
+                const participants = chat.participants.map((p: any) => {
+                    const participantId = p._id.toString();
+                    if (participantId !== currentUserId) {
+                        if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+                            return { ...p.toObject(), lastSeenAt: null };
+                        }
+                    }
+                    return p;
+                });
+
                 return {
                     ...chat.toObject(),
+                    participants,
                     lastMessage,
                     unreadCount: unreadCounts.get(chat._id.toString()) ?? 0,
-                    ...blockStatus,
+                    blockedByMe: blockStatus.blockedByMe,
+                    blockedByThem: false, // Force false so the blocked user doesn't know they are blocked
                 };
             })
         );
