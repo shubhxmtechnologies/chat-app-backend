@@ -118,13 +118,31 @@ export const setupSocket = (httpServer: HttpServer): Server => {
         socket.emit("initial_online_users", currentlyOnlineContacts);
 
         // Allow client to re-request the online users list on reconnection
-        socket.on("get_online_users", async () => {
+        socket.on("get_online_users", a sync () => {
             try {
                 const contacts = await getContactIds(userId);
                 const onlineList = contacts.filter((id) => isUserOnline(id.toString(), io));
                 socket.emit("initial_online_users", onlineList);
             } catch (err) {
                 console.error("Failed to fetch online users for socket:", err);
+            }
+        });
+
+        // Allow client to update auth token on silent refresh without disconnecting
+        socket.on("update_auth_token", (newToken: string) => {
+            try {
+                if (typeof newToken === "string" && newToken) {
+                    const decoded = verifyAccessToken(newToken);
+                    if (decoded.userId === userId) {
+                        if (!socket.handshake.auth) {
+                            socket.handshake.auth = {};
+                        }
+                        socket.handshake.auth.token = newToken;
+                        socket.data.user = decoded;
+                    }
+                }
+            } catch (err) {
+                console.warn("Failed to update socket auth token:", err);
             }
         });
 
