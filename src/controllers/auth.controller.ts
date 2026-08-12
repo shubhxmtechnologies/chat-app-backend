@@ -23,27 +23,35 @@ const DUMMY_PASSWORD_HASH = "$2b$12$.7TkQ6nMiPj6k8acLZ9UjuXQ/wddHeIYyI3aZsRDk9nE
 // ----------------------------------------------------
 // Cookie configuration
 // ----------------------------------------------------
-const isProduction =
-    envConfig.NODE_ENV === "production";
 const REFRESH_COOKIE_NAME = "refreshToken";
 
-const refreshCookieBaseOptions: CookieOptions = {
-    httpOnly: true,
+const getRefreshCookieOptions = (req: Request): CookieOptions => {
+    const isProduction = envConfig.NODE_ENV === "production";
+    
+    // Determine if the request is cross-site (different hostnames)
+    let isCrossSite = false;
+    const origin = req.get("origin");
+    if (origin) {
+        try {
+            const originHostname = new URL(origin).hostname;
+            if (originHostname !== req.hostname) {
+                isCrossSite = true;
+            }
+        } catch {
+            // Ignore parse errors
+        }
+    }
 
-    secure: isProduction,
+    // Cross-site POST requests require SameSite=None and Secure=true
+    const requireNone = isProduction || isCrossSite;
 
-    sameSite: isProduction
-        ? "none"
-        : "lax",
-
-    path: "/api/auth",
-};
-
-const refreshCookieOptions: CookieOptions = {
-    ...refreshCookieBaseOptions,
-
-    maxAge:
-        7 * 24 * 60 * 60 * 1000,
+    return {
+        httpOnly: true,
+        secure: requireNone,
+        sameSite: requireNone ? "none" : "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    };
 };
 
 // ----------------------------------------------------
@@ -116,7 +124,7 @@ export const register = asyncHandler(
         res.cookie(
             REFRESH_COOKIE_NAME,
             refreshToken,
-            refreshCookieOptions
+            getRefreshCookieOptions(req)
         );
 
         res.status(201).json({
@@ -208,7 +216,7 @@ export const login = asyncHandler(
         res.cookie(
             REFRESH_COOKIE_NAME,
             refreshToken,
-            refreshCookieOptions
+            getRefreshCookieOptions(req)
         );
 
         res.status(200).json({
@@ -370,7 +378,7 @@ export const logout = asyncHandler(
 
         res.clearCookie(
             REFRESH_COOKIE_NAME,
-            refreshCookieBaseOptions
+            getRefreshCookieOptions(req)
         );
 
         // H3: Force-disconnect all sockets for this user on logout.

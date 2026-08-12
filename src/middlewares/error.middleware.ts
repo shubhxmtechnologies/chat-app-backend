@@ -13,7 +13,11 @@ export const errorHandler = (
     res: Response,
     next: NextFunction
 ): void => {
-    console.error(err);
+    if (err instanceof AppError && err.statusCode < 500) {
+        console.log(`[${err.statusCode}] ${err.message}`);
+    } else {
+        console.error(err);
+    }
 
     if (res.headersSent) {
         return next(err);
