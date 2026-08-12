@@ -144,6 +144,8 @@ export const register = asyncHandler(
                 globalMute: user.globalMute,
                 mutedChats: user.mutedChats,
             },
+
+            refreshToken, // Included in body to bypass Safari third-party cookie blocking
         });
     }
 );
@@ -235,7 +237,9 @@ export const login = asyncHandler(
                 bio: user.bio ?? null,
                 globalMute: user.globalMute,
                 mutedChats: user.mutedChats,
-            }
+            },
+
+            refreshToken, // Included in body to bypass Safari third-party cookie blocking
         });
     }
 );
@@ -248,8 +252,9 @@ export const login = asyncHandler(
 
 export const refresh = asyncHandler(
     async (req: Request, res: Response) => {
+        // Fallback to body to bypass mobile Safari third-party cookie blocking
         const refreshToken =
-            req.cookies?.refreshToken;
+            req.cookies?.refreshToken || req.body?.refreshToken;
 
         if (
             typeof refreshToken !== "string" ||
@@ -322,7 +327,9 @@ export const refresh = asyncHandler(
                 bio: user.bio ?? null,
                 globalMute: user.globalMute,
                 mutedChats: user.mutedChats,
-            }
+            },
+            
+            refreshToken, // Send existing token back so frontend can persist it
         });
     }
 );
