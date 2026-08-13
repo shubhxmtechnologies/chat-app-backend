@@ -39,8 +39,12 @@ export const cleanupUserRateLimits = (userId: string) => {
 // H3: Token re-validation interval (5 minutes)
 const TOKEN_REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
 
+let ioInstance: Server | null = null;
+export const getIo = () => ioInstance;
+
 export const setupSocket = (httpServer: HttpServer): Server => {
     const io = new Server<
+
         any,
         any,
         any,
@@ -53,6 +57,8 @@ export const setupSocket = (httpServer: HttpServer): Server => {
         // M5: Limit socket payload size to 10KB — sufficient for text chat messages.
         maxHttpBufferSize: 10 * 1024,
     });
+    
+    ioInstance = io;
 
     io.use((socket, next) => {
         try {
