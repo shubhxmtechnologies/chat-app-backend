@@ -13,6 +13,10 @@ import {
     uploadBuffer,
 } from "../services/cloudinary.service.js";
 import mongoose from "mongoose";
+import { sendPushNotification } from "../services/push.service.js";
+import { isUserOnline } from "../socket/onlineUsers.js";
+import { envConfig } from "../config/env.js";
+import { User } from "../models/user.model.js";
 
 
 export const sendMessage = asyncHandler(async (req, res) => {
@@ -142,6 +146,15 @@ export const sendMediaMessage = asyncHandler(
 
                 if (recipientId) {
                     io.to(`user:${recipientId}`).emit("receive_message", message);
+                    if (!isUserOnline(recipientId, io)) {
+                        const sender = await User.findById(senderId).select("username");
+                        const senderName = sender?.username || "Someone";
+                        sendPushNotification(recipientId, {
+                            title: `New media from ${senderName}`,
+                            body: "Sent an attachment",
+                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`
+                        }).catch(console.error);
+                    }
                 }
                 io.to(`user:${senderId}`).emit("receive_message", message);
             } catch (error) {

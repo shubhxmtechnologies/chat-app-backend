@@ -28,4 +28,7 @@ export const envConfig: EnvConfig = {
     CLOUDINARY_API_SECRET: getEnv(
         "CLOUDINARY_API_SECRET"
     ),
+    VAPID_PUBLIC_KEY: getEnv("VAPID_PUBLIC_KEY"),
+    VAPID_PRIVATE_KEY: getEnv("VAPID_PRIVATE_KEY"),
+    
 };

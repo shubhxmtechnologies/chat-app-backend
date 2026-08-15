@@ -32,7 +32,7 @@ const userSchema = new Schema<IUser>(
             minlength: 8,
             maxlength: 128,
         },
-        
+
         name: {
             firstName: {
                 type: String,
@@ -105,6 +105,10 @@ const userSchema = new Schema<IUser>(
             ],
             default: [],
         },
+        pushSubscription: {
+            type: Object, // Stores endpoint and keys { p256dh, auth }
+            default: null
+        }
     },
 
     {

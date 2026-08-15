@@ -555,3 +555,13 @@ export const toggleChatMute = asyncHandler(
         });
     }
 );
+
+export const savePushSubscription = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+        throw new AppError("Unauthorized", 401);
+    }
+    const { subscription } = req.body;
+    await User.findByIdAndUpdate(userId, { $set: { pushSubscription: subscription } });
+    res.status(200).json({ success: true, message: "Subscription saved" });
+});

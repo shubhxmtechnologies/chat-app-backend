@@ -12,6 +12,10 @@ import { getUserRateLimits } from "./index.js";
 import type { TokenPayload } from "../utils/jwt.util.js";
 import { getAuthorizedChat } from "../services/chat.service.js";
 import mongoose from "mongoose";
+import { sendPushNotification } from "../services/push.service.js";
+import { isUserOnline } from "./onlineUsers.js";
+import { envConfig } from "../config/env.js";
+import { User } from "../models/user.model.js";
 
 interface SocketData {
     user: TokenPayload;
@@ -227,6 +231,16 @@ export const registerChatHandlers = (
                         "receive_message",
                         message
                     );
+                    
+                    if (!isUserOnline(recipientId, io)) {
+                        const sender = await User.findById(senderId).select("username");
+                        const senderName = sender?.username || "Someone";
+                        sendPushNotification(recipientId, {
+                            title: `New message from ${senderName}`,
+                            body: text,
+                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`
+                        }).catch(console.error);
+                    }
                 }
 
                 io.to(`user:${senderId}`).emit("receive_message", message);

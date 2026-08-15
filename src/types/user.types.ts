@@ -1,4 +1,5 @@
 import type { Types } from "mongoose";
+import type { PushSubscription } from "web-push";
 
 export interface IUserName {
     firstName: string;
@@ -11,6 +12,7 @@ export interface IFieldChange {
 }
 
 export interface IUser {
+    pushSubscription: PushSubscription | null;
     username: string;
     email: string;
     password: string;
