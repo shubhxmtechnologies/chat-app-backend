@@ -238,7 +238,11 @@ export const registerChatHandlers = (
                         sendPushNotification(recipientId, {
                             title: `New message from ${senderName}`,
                             body: text,
-                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`
+                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
+                            chatId,
+                            senderId,
+                            senderName,
+                            tag: `chat_${chatId}`
                         }).catch(console.error);
                     }
                 }

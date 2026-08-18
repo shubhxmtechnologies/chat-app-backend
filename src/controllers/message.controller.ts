@@ -149,10 +149,15 @@ export const sendMediaMessage = asyncHandler(
                     if (!isUserOnline(recipientId, io)) {
                         const sender = await User.findById(senderId).select("username");
                         const senderName = sender?.username || "Someone";
+                        const mediaLabel = messageType === "voice" ? "🎤 Voice note" : "📷 Photo";
                         sendPushNotification(recipientId, {
-                            title: `New media from ${senderName}`,
-                            body: "Sent an attachment",
-                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`
+                            title: `New message from ${senderName}`,
+                            body: mediaLabel,
+                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
+                            chatId,
+                            senderId,
+                            senderName,
+                            tag: `chat_${chatId}`
                         }).catch(console.error);
                     }
                 }
