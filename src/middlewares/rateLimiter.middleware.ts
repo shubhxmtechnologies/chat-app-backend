@@ -2,7 +2,7 @@ import { rateLimit } from "express-rate-limit";
 
 export const generalRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 300,
+    limit: 200,
 
     standardHeaders: "draft-8",
     legacyHeaders: false,
@@ -10,6 +10,45 @@ export const generalRateLimiter = rateLimit({
     message: {
         success: false,
         message: "Too many requests. Please try again later.",
+    },
+});
+
+export const healthRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+
+    message: {
+        success: false,
+        message: "Too many health check requests.",
+    },
+});
+
+export const refreshRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+
+    message: {
+        success: false,
+        message: "Too many token refresh attempts. Please try again later.",
+    },
+});
+
+export const logoutRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+
+    message: {
+        success: false,
+        message: "Too many logout requests. Please try again later.",
     },
 });
 

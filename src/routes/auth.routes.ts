@@ -13,6 +13,8 @@ import {
     loginRateLimiter,
     registerRateLimiter,
     checkAvailabilityLimiter,
+    refreshRateLimiter,
+    logoutRateLimiter,
 } from "../middlewares/rateLimiter.middleware.js";
 
 import {
@@ -37,12 +39,14 @@ router.post(
 
 router.post(
     "/refresh",
+    refreshRateLimiter,
     requireTrustedOrigin,
     refresh
 );
 
 router.post(
     "/logout",
+    logoutRateLimiter,
     requireTrustedOrigin,
     logout
 );

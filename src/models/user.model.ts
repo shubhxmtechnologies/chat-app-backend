@@ -108,7 +108,15 @@ const userSchema = new Schema<IUser>(
         pushSubscription: {
             type: Object, // Stores endpoint and keys { p256dh, auth }
             default: null
-        }
+        },
+        failedLoginAttempts: {
+            type: Number,
+            default: 0,
+        },
+        lockUntil: {
+            type: Date,
+            default: null,
+        },
     },
 
     {

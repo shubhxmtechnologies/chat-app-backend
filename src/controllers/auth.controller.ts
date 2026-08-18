@@ -194,16 +194,48 @@ export const login = asyncHandler(
             );
         }
 
+        const MAX_FAILED_ATTEMPTS = 5;
+        const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+        // Check if account is temporarily locked
+        if (user.lockUntil && user.lockUntil > new Date()) {
+            const minutesRemaining = Math.max(
+                1,
+                Math.ceil((user.lockUntil.getTime() - Date.now()) / (60 * 1000))
+            );
+            throw new AppError(
+                `Account is temporarily locked due to excessive failed attempts. Please try again in ${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"}.`,
+                429
+            );
+        }
+
         const passwordMatches = await bcrypt.compare(
             String(password),
             user.password
         );
 
         if (!passwordMatches) {
+            const currentFailed = (user.failedLoginAttempts || 0) + 1;
+            const updateDoc: { failedLoginAttempts: number; lockUntil?: Date } = {
+                failedLoginAttempts: currentFailed,
+            };
+
+            if (currentFailed >= MAX_FAILED_ATTEMPTS) {
+                updateDoc.lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+            }
+
+            await User.findByIdAndUpdate(user._id, { $set: updateDoc });
+
             throw new AppError(
                 "Invalid email or password",
                 401
             );
+        }
+
+        // Reset failed login attempts on success
+        if (user.failedLoginAttempts > 0 || user.lockUntil) {
+            user.failedLoginAttempts = 0;
+            user.lockUntil = null;
         }
 
         const userId = user._id.toString();

@@ -35,4 +35,8 @@ export interface IUser {
     mutedChats: Types.ObjectId[];
     
     fieldChangeLog: IFieldChange[];
+
+    failedLoginAttempts: number;
+
+    lockUntil: Date | null;
 }

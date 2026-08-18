@@ -7,6 +7,7 @@ import { envConfig } from "./config/env.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import {
     generalRateLimiter,
+    healthRateLimiter,
 } from "./middlewares/rateLimiter.middleware.js";
 import {
     sanitizeRequest,
@@ -42,9 +43,17 @@ app.use(
     })
 );
 
+// Payload size constraints for DoS prevention
 app.use(
     express.json({
-        limit: "100kb",
+        limit: "50kb",
+    })
+);
+
+app.use(
+    express.urlencoded({
+        extended: false,
+        limit: "10kb",
     })
 );
 
@@ -57,7 +66,7 @@ app.use(generalRateLimiter);
 // ROUTES
 // --------------------
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", healthRateLimiter, (_req, res) => {
     res.status(200).json({
         success: true,
         message: "OK",

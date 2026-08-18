@@ -8,6 +8,13 @@ import { setupSocket } from "./socket/index.js";
 import { startJobScheduler } from "./jobs/scheduler.job.js";
 
 const server = http.createServer(app);
+
+// Slowloris & Connection Exhaustion DoS Hardening
+server.requestTimeout = 30000; // 30 seconds max to receive complete request
+server.headersTimeout = 35000; // 35 seconds max for HTTP headers
+server.keepAliveTimeout = 5000; // 5 seconds keep-alive idle timeout
+server.maxHeadersCount = 100; // Max HTTP headers count
+
 const io = setupSocket(server);
 
 app.set("io", io);
