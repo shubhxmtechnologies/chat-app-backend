@@ -232,19 +232,17 @@ export const registerChatHandlers = (
                         message
                     );
                     
-                    if (!isUserOnline(recipientId, io)) {
-                        const sender = await User.findById(senderId).select("username");
-                        const senderName = sender?.username || "Someone";
-                        sendPushNotification(recipientId, {
-                            title: `New message from ${senderName}`,
-                            body: text,
-                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
-                            chatId,
-                            senderId,
-                            senderName,
-                            tag: `chat_${chatId}`
-                        }).catch(console.error);
-                    }
+                    const sender = await User.findById(senderId).select("username");
+                    const senderName = sender?.username || "Someone";
+                    sendPushNotification(recipientId, {
+                        title: `New message from ${senderName}`,
+                        body: text,
+                        url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
+                        chatId,
+                        senderId,
+                        senderName,
+                        tag: `chat_${chatId}`
+                    }).catch(console.error);
                 }
 
                 io.to(`user:${senderId}`).emit("receive_message", message);
