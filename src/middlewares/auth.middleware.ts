@@ -14,12 +14,13 @@ export const authenticate = (
 ): void => {
     try {
         const authorization = req.headers.authorization;
+        let token: string | undefined;
 
-        if (!authorization?.startsWith("Bearer ")) {
-            throw new AppError("Unauthorized", 401);
+        if (authorization?.startsWith("Bearer ")) {
+            token = authorization.slice(7).trim();
+        } else if (typeof req.query.token === "string" && req.query.token.trim()) {
+            token = req.query.token.trim();
         }
-
-        const token = authorization.slice(7).trim();
 
         if (!token) {
             throw new AppError("Unauthorized", 401);

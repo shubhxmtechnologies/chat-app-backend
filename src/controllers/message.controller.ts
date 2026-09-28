@@ -17,6 +17,8 @@ import { sendPushNotification } from "../services/push.service.js";
 import { isUserOnline } from "../socket/onlineUsers.js";
 import { envConfig } from "../config/env.js";
 import { User } from "../models/user.model.js";
+import { Message } from "../models/message.model.js";
+import { Readable } from "node:stream";
 
 
 export const sendMessage = asyncHandler(async (req, res) => {
@@ -373,3 +375,70 @@ export const removeMessageForMe = asyncHandler(async (req, res) => {
         message: "Message deleted for you",
     });
 });
+
+export const downloadMessageMedia = asyncHandler(
+    async (req: Request, res: Response) => {
+        const userId = req.user?.userId;
+        const { messageId } = req.params;
+
+        if (!userId) {
+            throw new AppError("Unauthorized", 401);
+        }
+
+        if (typeof messageId !== "string" || !mongoose.isValidObjectId(messageId)) {
+            throw new AppError("Invalid message ID", 400);
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message || message.isDeletedForEveryone) {
+            throw new AppError("Message not found or deleted", 404);
+        }
+
+        if (!message.mediaUrl) {
+            throw new AppError("Message has no media attached", 400);
+        }
+
+        // Verify requesting user is part of the chat
+        await getAuthorizedChat(message.chat.toString(), userId);
+
+        // Detect extension and filename
+        let ext = "jpg";
+        if (message.messageType === "voice") {
+            ext = "webm";
+        } else {
+            const urlParts = message.mediaUrl.split("?");
+            const urlPath = urlParts[0] ?? "";
+            const matchExt = urlPath.match(/\.([a-zA-Z0-9]+)$/);
+            if (matchExt && matchExt[1]) {
+                ext = matchExt[1].toLowerCase();
+            }
+        }
+
+        const filename = `pinsta-${message.messageType}-${message._id.toString().slice(-6)}.${ext}`;
+
+        const mediaResponse = await fetch(message.mediaUrl);
+        if (!mediaResponse.ok) {
+            throw new AppError("Failed to fetch media from storage", 502);
+        }
+
+        const contentType =
+            mediaResponse.headers.get("content-type") ||
+            (message.messageType === "voice" ? "audio/webm" : `image/${ext}`);
+
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Type", contentType);
+
+        const contentLength = mediaResponse.headers.get("content-length");
+        if (contentLength) {
+            res.setHeader("Content-Length", contentLength);
+        }
+
+        if (typeof Readable.fromWeb === "function" && mediaResponse.body) {
+            const stream = Readable.fromWeb(mediaResponse.body as any);
+            stream.pipe(res);
+        } else {
+            const arrayBuffer = await mediaResponse.arrayBuffer();
+            res.send(Buffer.from(arrayBuffer));
+        }
+    }
+);

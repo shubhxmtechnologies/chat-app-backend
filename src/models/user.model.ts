@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 
 import type { IUser } from "../types/user.types.js";
 
-export const DEFAULT_AVATAR_URL = "https://cutiedp.com/wp-content/uploads/2025/08/no-dp-image-4.webp";
+export const DEFAULT_AVATAR_URL = "/no-dp.svg";
 
 const userSchema = new Schema<IUser>(
     {

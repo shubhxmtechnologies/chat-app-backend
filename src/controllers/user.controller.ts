@@ -25,6 +25,7 @@ import {
 import type { IUser } from "../types/user.types.js";
 import type { Document } from "mongoose";
 import bcrypt from "bcryptjs";
+import { sendTestPush } from "../services/push.service.js";
 
 const FIELD_CHANGE_LIMIT = 2;
 const FIELD_CHANGE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // 2 weeks
@@ -564,4 +565,26 @@ export const savePushSubscription = asyncHandler(async (req: Request, res: Respo
     const { subscription } = req.body;
     await User.findByIdAndUpdate(userId, { $set: { pushSubscription: subscription } });
     res.status(200).json({ success: true, message: "Subscription saved" });
+});
+
+export const deletePushSubscription = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+        throw new AppError("Unauthorized", 401);
+    }
+    await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
+    res.status(200).json({ success: true, message: "Subscription removed" });
+});
+
+export const sendTestPushNotification = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+        throw new AppError("Unauthorized", 401);
+    }
+    try {
+        await sendTestPush(userId);
+        res.status(200).json({ success: true, message: "Test notification sent successfully" });
+    } catch (error: any) {
+        throw new AppError(error?.message || "Failed to send test push notification", 400);
+    }
 });

@@ -5,7 +5,7 @@ import { User } from "../models/user.model.js";
 webpush.setVapidDetails(
     // The "mailto:" email is required by the Web Push protocol. It acts as a point of contact
     // for push service providers (like Google or Mozilla) if they need to reach the sender.
-    // It is NEVER shown to the end users. It can be any email you monitor.
+    // It is NEVER shown to the end users.
     "mailto:shubhxmtechnologies@gmail.com",
     envConfig.VAPID_PUBLIC_KEY,
     envConfig.VAPID_PRIVATE_KEY
@@ -21,22 +21,18 @@ export interface PushNotificationOptions {
     tag?: string;
     badge?: string;
     icon?: string;
+    isTest?: boolean;
 }
 
-interface PushState {
-    lastSentTimestamp: number;
-    pendingTimer: NodeJS.Timeout | null;
-    burstCount: number;
-    latestBody: string;
-    options: PushNotificationOptions;
-}
-
-// In-memory queue to throttle rapid-fire bursts while keeping 1st message instant (real-time)
-const pushStates = new Map<string, PushState>();
-
-const BURST_THROTTLE_WINDOW_MS = 3500; // 3.5 seconds throttle window for bursts
-
-const executePushSend = async (recipientId: string, options: PushNotificationOptions, count: number, latestBody: string) => {
+/**
+ * Send real-time Web Push notification immediately to a recipient.
+ * Artificial delays, burst throttles, and spam debounce queues have been removed
+ * so notifications are delivered to the recipient in 0ms real time.
+ */
+export const sendPushNotification = async (
+    recipientId: string,
+    options: PushNotificationOptions
+): Promise<void> => {
     try {
         const recipient = await User.findById(recipientId);
         if (!recipient || !recipient.pushSubscription) return;
@@ -47,83 +43,63 @@ const executePushSend = async (recipientId: string, options: PushNotificationOpt
         if (options.senderId && recipient.blockedUsers?.some((id) => id.toString() === options.senderId)) return;
 
         const senderName = options.senderName || "Someone";
-        const title = count > 1
-            ? `${senderName} (${count} new messages)`
-            : (options.title || `New message from ${senderName}`);
+        const title = options.title || `New message from ${senderName}`;
 
         const payload = {
             title,
-            body: latestBody,
+            body: options.body,
             url: options.url,
             chatId: options.chatId,
             senderId: options.senderId,
             senderName,
-            count,
+            isTest: !!options.isTest,
             tag: options.tag || (options.chatId ? `chat_${options.chatId}` : undefined),
             renotify: true,
-            badge: options.badge || "/favicon.svg",
-            icon: options.icon || "/favicon.svg",
+            badge: options.badge || "/pwa-192x192.png",
+            icon: options.icon || "/pwa-192x192.png",
             vibrate: [200, 100, 200]
         };
 
+        // Real-time immediate dispatch (no delay, no pending timer)
         await webpush.sendNotification(recipient.pushSubscription, JSON.stringify(payload));
     } catch (error: any) {
         if (error.statusCode === 410 || error.statusCode === 404) {
-            // Subscription expired or revoked, clean it up
+            // Subscription expired or revoked, clean it up from database
             await User.findByIdAndUpdate(recipientId, { $set: { pushSubscription: null } });
         } else {
-            console.error("Push notification failed:", error);
+            console.error("Push notification delivery failed:", error?.message || error);
         }
     }
 };
 
-export const sendPushNotification = async (
-    recipientId: string,
-    options: PushNotificationOptions
-) => {
+/**
+ * Send an immediate test notification to verify push delivery for a specific user
+ */
+export const sendTestPush = async (userId: string): Promise<void> => {
+    const user = await User.findById(userId);
+    if (!user || !user.pushSubscription) {
+        throw new Error("No active push subscription found. Please enable notifications first.");
+    }
+
+    const payload = {
+        title: "Pinsta Notification Test",
+        body: "Real-time notifications are working! You'll receive message alerts instantly. 🚀",
+        url: "/profile",
+        isTest: true,
+        tag: `test_${Date.now()}`,
+        renotify: true,
+        badge: "/pwa-192x192.png",
+        icon: "/pwa-192x192.png",
+        vibrate: [200, 100, 200]
+    };
+
     try {
-        const queueKey = `${recipientId}:${options.chatId || "general"}`;
-        const now = Date.now();
-        const state = pushStates.get(queueKey);
-
-        // 1. FIRST MESSAGE (or after quiet period): Send IMMEDIATELY (Real-Time 0ms delay)
-        if (!state || (now - state.lastSentTimestamp > BURST_THROTTLE_WINDOW_MS && !state.pendingTimer)) {
-            const newState: PushState = {
-                lastSentTimestamp: now,
-                pendingTimer: null,
-                burstCount: 1,
-                latestBody: options.body,
-                options,
-            };
-            pushStates.set(queueKey, newState);
-            await executePushSend(recipientId, options, 1, options.body);
-            return;
+        await webpush.sendNotification(user.pushSubscription, JSON.stringify(payload));
+    } catch (error: any) {
+        if (error.statusCode === 410 || error.statusCode === 404) {
+            await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
+            throw new Error("Subscription expired or uninstalled. Please toggle notifications off and on again.");
         }
-
-        // 2. SUBSEQUENT RAPID MESSAGES (Anti-Spam Burst): Buffer and collapse
-        state.burstCount += 1;
-        state.latestBody = options.body;
-        state.options = options;
-
-        if (!state.pendingTimer) {
-            const remainingDelay = Math.max(1200, BURST_THROTTLE_WINDOW_MS - (now - state.lastSentTimestamp));
-            state.pendingTimer = setTimeout(async () => {
-                const currentState = pushStates.get(queueKey);
-                if (currentState && currentState.burstCount > 1) {
-                    const totalCount = currentState.burstCount;
-                    const body = currentState.latestBody;
-                    const opts = currentState.options;
-                    currentState.lastSentTimestamp = Date.now();
-                    currentState.pendingTimer = null;
-                    currentState.burstCount = 0;
-                    await executePushSend(recipientId, opts, totalCount, body);
-                } else if (currentState) {
-                    currentState.pendingTimer = null;
-                    currentState.burstCount = 0;
-                }
-            }, remainingDelay);
-        }
-    } catch (err) {
-        console.error("Error scheduling push notification:", err);
+        throw error;
     }
 };
