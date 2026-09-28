@@ -16,7 +16,7 @@ import {
     getBlockedUsers,
     getProfile
 } from "../controllers/user.controller.js";
-import { searchUsers, toggleGlobalMute, toggleChatMute, savePushSubscription, deletePushSubscription, sendTestPushNotification } from "../controllers/user.controller.js";
+import { searchUsers, toggleGlobalMute, toggleChatMute, savePushSubscription, deletePushSubscription, sendTestPushNotification, getPushStatus } from "../controllers/user.controller.js";
 import { searchRateLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
@@ -101,6 +101,7 @@ router.get(
     searchUsers
 );
 
+router.get("/me/push-status", authenticate, getPushStatus);
 router.post("/me/push-subscription", authenticate, savePushSubscription);
 router.delete("/me/push-subscription", authenticate, deletePushSubscription);
 router.post("/me/push-test", authenticate, sendTestPushNotification);

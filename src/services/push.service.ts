@@ -66,12 +66,34 @@ export const sendPushNotification = async (
     const startTime = Date.now();
     try {
         const recipient = await User.findById(recipientId).select(
-            "pushSubscription globalMute mutedChats blockedUsers"
+            "pushSubscription pushSubscriptions globalMute mutedChats blockedUsers"
         ).lean();
 
         const dbTime = Date.now() - startTime;
 
-        if (!recipient || !recipient.pushSubscription) {
+        if (!recipient) return;
+
+        // Collect all active subscriptions (multi-device + legacy fallback)
+        const subs: any[] = [];
+        const seenEndpoints = new Set<string>();
+
+        if ((recipient as any).pushSubscriptions?.length) {
+            for (const s of (recipient as any).pushSubscriptions) {
+                if (s?.endpoint && !seenEndpoints.has(s.endpoint)) {
+                    seenEndpoints.add(s.endpoint);
+                    subs.push(s);
+                }
+            }
+        }
+        if (recipient.pushSubscription && typeof recipient.pushSubscription === "object") {
+            const legacySub = recipient.pushSubscription as any;
+            if (legacySub.endpoint && !seenEndpoints.has(legacySub.endpoint)) {
+                seenEndpoints.add(legacySub.endpoint);
+                subs.push(legacySub);
+            }
+        }
+
+        if (subs.length === 0) {
             console.log(`[PUSH] No active push subscription for recipient ${recipientId} (db: ${dbTime}ms)`);
             return;
         }
@@ -99,42 +121,75 @@ export const sendPushNotification = async (
             vibrate: [200, 100, 200]
         };
 
-        const sub = recipient.pushSubscription as any;
-        const endpoint = sub?.endpoint || "unknown";
-        const pushService = endpoint.includes("fcm.googleapis.com") ? "FCM"
-            : endpoint.includes("mozilla") ? "Mozilla"
-            : endpoint.includes("windows") ? "WNS"
-            : "PushService";
+        const payloadStr = JSON.stringify(payload);
 
-        console.log(`[PUSH] Dispatching to ${recipientId} via ${pushService} (db: ${dbTime}ms)`);
+        // Dispatch in parallel to all registered devices of this recipient
+        const dispatchPromises = subs.map(async (sub) => {
+            const endpoint = sub.endpoint || "unknown";
+            const pushService = endpoint.includes("fcm.googleapis.com") ? "FCM"
+                : endpoint.includes("mozilla") ? "Mozilla"
+                : endpoint.includes("windows") ? "WNS"
+                : "PushService";
 
-        // Real-time immediate dispatch with high urgency
-        const pushStart = Date.now();
-        await webpush.sendNotification(sub, JSON.stringify(payload), PUSH_OPTIONS_CHAT);
-        const pushTime = Date.now() - pushStart;
-        const totalTime = Date.now() - startTime;
+            const pushStart = Date.now();
+            try {
+                await webpush.sendNotification(sub, payloadStr, PUSH_OPTIONS_CHAT);
+                const pushTime = Date.now() - pushStart;
+                console.log(`[PUSH] ✅ Delivered to ${pushService} in ${pushTime}ms`);
+            } catch (error: any) {
+                const pushTime = Date.now() - pushStart;
+                if (error.statusCode === 410 || error.statusCode === 404) {
+                    // Remove ONLY this expired device endpoint, preserving other devices
+                    console.log(`[PUSH] 🗑️ Subscription expired (410) for ${recipientId} endpoint ${endpoint.substring(0, 45)}...`);
+                    await User.findByIdAndUpdate(recipientId, {
+                        $pull: { pushSubscriptions: { endpoint: sub.endpoint } }
+                    });
+                    if ((recipient.pushSubscription as any)?.endpoint === sub.endpoint) {
+                        await User.findByIdAndUpdate(recipientId, { $set: { pushSubscription: null } });
+                    }
+                } else {
+                    console.error(`[PUSH] ❌ Failed to ${pushService} after ${pushTime}ms:`, error?.statusCode, error?.message || error);
+                }
+            }
+        });
 
-        console.log(`[PUSH] ✅ Delivered to ${pushService} in ${pushTime}ms (total: ${totalTime}ms)`);
+        await Promise.allSettled(dispatchPromises);
     } catch (error: any) {
-        const totalTime = Date.now() - startTime;
-        if (error.statusCode === 410 || error.statusCode === 404) {
-            // Subscription expired or revoked, clean it up from database
-            await User.findByIdAndUpdate(recipientId, { $set: { pushSubscription: null } });
-            console.log(`[PUSH] 🗑️ Subscription expired for ${recipientId} (${totalTime}ms)`);
-        } else {
-            console.error(`[PUSH] ❌ Failed for ${recipientId} after ${totalTime}ms:`, error?.statusCode, error?.message || error);
-        }
+        console.error(`[PUSH] Global failure for ${recipientId}:`, error?.message || error);
     }
 };
 
 /**
  * Send an immediate test notification to verify push delivery for a specific user
  */
-export const sendTestPush = async (userId: string): Promise<void> => {
+export const sendTestPush = async (userId: string): Promise<{ success: boolean; deliveredCount: number }> => {
     const startTime = Date.now();
-    const user = await User.findById(userId).select("pushSubscription").lean();
-    if (!user || !user.pushSubscription) {
-        throw new Error("No active push subscription found. Please enable notifications first.");
+    const user = await User.findById(userId).select("pushSubscription pushSubscriptions").lean();
+    if (!user) {
+        throw new Error("User not found.");
+    }
+
+    const subs: any[] = [];
+    const seenEndpoints = new Set<string>();
+
+    if ((user as any).pushSubscriptions?.length) {
+        for (const s of (user as any).pushSubscriptions) {
+            if (s?.endpoint && !seenEndpoints.has(s.endpoint)) {
+                seenEndpoints.add(s.endpoint);
+                subs.push(s);
+            }
+        }
+    }
+    if (user.pushSubscription && typeof user.pushSubscription === "object") {
+        const legacySub = user.pushSubscription as any;
+        if (legacySub.endpoint && !seenEndpoints.has(legacySub.endpoint)) {
+            seenEndpoints.add(legacySub.endpoint);
+            subs.push(legacySub);
+        }
+    }
+
+    if (subs.length === 0) {
+        throw new Error("No active push subscription found. Please click 'Enable Push' first.");
     }
 
     const payload = {
@@ -149,15 +204,33 @@ export const sendTestPush = async (userId: string): Promise<void> => {
         vibrate: [200, 100, 200]
     };
 
-    try {
-        const pushStart = Date.now();
-        await webpush.sendNotification(user.pushSubscription as any, JSON.stringify(payload), PUSH_OPTIONS_TEST);
-        console.log(`[PUSH-TEST] ✅ Delivered in ${Date.now() - pushStart}ms (total: ${Date.now() - startTime}ms)`);
-    } catch (error: any) {
-        if (error.statusCode === 410 || error.statusCode === 404) {
-            await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
-            throw new Error("Subscription expired or uninstalled. Please toggle notifications off and on again.");
+    const payloadStr = JSON.stringify(payload);
+    let deliveredCount = 0;
+
+    const testPromises = subs.map(async (sub) => {
+        try {
+            await webpush.sendNotification(sub, payloadStr, PUSH_OPTIONS_TEST);
+            deliveredCount++;
+        } catch (error: any) {
+            if (error.statusCode === 410 || error.statusCode === 404) {
+                await User.findByIdAndUpdate(userId, {
+                    $pull: { pushSubscriptions: { endpoint: sub.endpoint } }
+                });
+                if ((user.pushSubscription as any)?.endpoint === sub.endpoint) {
+                    await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
+                }
+            }
+            throw error;
         }
-        throw error;
+    });
+
+    const results = await Promise.allSettled(testPromises);
+    const hasSuccess = results.some((r) => r.status === "fulfilled");
+
+    if (!hasSuccess) {
+        throw new Error("Push delivery rejected by browser push service. Please re-subscribe in Settings.");
     }
+
+    console.log(`[PUSH-TEST] ✅ Test delivered to ${deliveredCount}/${subs.length} devices in ${Date.now() - startTime}ms`);
+    return { success: true, deliveredCount };
 };

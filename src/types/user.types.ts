@@ -11,8 +11,20 @@ export interface IFieldChange {
     changedAt: Date;
 }
 
+export interface IUserPushSubscription {
+    endpoint: string;
+    expirationTime?: number | null;
+    keys: {
+        p256dh: string;
+        auth: string;
+    };
+    userAgent?: string;
+    createdAt?: Date;
+}
+
 export interface IUser {
     pushSubscription: PushSubscription | null;
+    pushSubscriptions?: IUserPushSubscription[];
     username: string;
     email: string;
     password: string;

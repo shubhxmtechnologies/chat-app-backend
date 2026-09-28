@@ -563,8 +563,35 @@ export const savePushSubscription = asyncHandler(async (req: Request, res: Respo
         throw new AppError("Unauthorized", 401);
     }
     const { subscription } = req.body;
-    await User.findByIdAndUpdate(userId, { $set: { pushSubscription: subscription } });
-    res.status(200).json({ success: true, message: "Subscription saved" });
+    if (!subscription || !subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+        throw new AppError("Invalid push subscription data", 400);
+    }
+
+    const userAgent = req.headers["user-agent"] || "";
+
+    // 1. Remove any previous entry with this exact endpoint to prevent duplicates
+    await User.findByIdAndUpdate(userId, {
+        $pull: { pushSubscriptions: { endpoint: subscription.endpoint } }
+    });
+
+    // 2. Add the active subscription to array and update legacy field
+    await User.findByIdAndUpdate(userId, {
+        $push: {
+            pushSubscriptions: {
+                endpoint: subscription.endpoint,
+                expirationTime: subscription.expirationTime || null,
+                keys: {
+                    p256dh: subscription.keys.p256dh,
+                    auth: subscription.keys.auth,
+                },
+                userAgent,
+                createdAt: new Date(),
+            },
+        },
+        $set: { pushSubscription: subscription },
+    });
+
+    res.status(200).json({ success: true, message: "Subscription saved successfully" });
 });
 
 export const deletePushSubscription = asyncHandler(async (req: Request, res: Response) => {
@@ -572,8 +599,37 @@ export const deletePushSubscription = asyncHandler(async (req: Request, res: Res
     if (!userId) {
         throw new AppError("Unauthorized", 401);
     }
-    await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
+    const { endpoint } = req.body || {};
+
+    if (endpoint) {
+        await User.findByIdAndUpdate(userId, {
+            $pull: { pushSubscriptions: { endpoint } }
+        });
+    } else {
+        await User.findByIdAndUpdate(userId, {
+            $set: { pushSubscriptions: [], pushSubscription: null }
+        });
+    }
+
     res.status(200).json({ success: true, message: "Subscription removed" });
+});
+
+export const getPushStatus = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+        throw new AppError("Unauthorized", 401);
+    }
+    const user = await User.findById(userId).select("pushSubscription pushSubscriptions globalMute").lean();
+    const subs = (user as any)?.pushSubscriptions?.length
+        ? (user as any).pushSubscriptions
+        : (user?.pushSubscription ? [user.pushSubscription] : []);
+
+    res.status(200).json({
+        success: true,
+        isSubscribed: subs.length > 0,
+        deviceCount: subs.length,
+        globalMute: !!user?.globalMute,
+    });
 });
 
 export const sendTestPushNotification = asyncHandler(async (req: Request, res: Response) => {

@@ -106,8 +106,23 @@ const userSchema = new Schema<IUser>(
             default: [],
         },
         pushSubscription: {
-            type: Object, // Stores endpoint and keys { p256dh, auth }
+            type: Object, // Legacy single subscription
             default: null
+        },
+        pushSubscriptions: {
+            type: [
+                {
+                    endpoint: { type: String, required: true },
+                    expirationTime: { type: Number, default: null },
+                    keys: {
+                        p256dh: { type: String, required: true },
+                        auth: { type: String, required: true },
+                    },
+                    userAgent: { type: String, default: "" },
+                    createdAt: { type: Date, default: Date.now },
+                },
+            ],
+            default: [],
         },
         failedLoginAttempts: {
             type: Number,
