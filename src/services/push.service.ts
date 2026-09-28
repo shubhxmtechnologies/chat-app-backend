@@ -61,7 +61,10 @@ export const sendPushNotification = async (
         };
 
         // Real-time immediate dispatch (no delay, no pending timer)
-        await webpush.sendNotification(recipient.pushSubscription, JSON.stringify(payload));
+        await webpush.sendNotification(recipient.pushSubscription, JSON.stringify(payload), {
+            urgency: 'high',  // Force immediate delivery (no FCM batching)
+            TTL: 300,          // Expire after 5 minutes (prevents stale dump on reconnect)
+        });
     } catch (error: any) {
         if (error.statusCode === 410 || error.statusCode === 404) {
             // Subscription expired or revoked, clean it up from database
@@ -94,7 +97,10 @@ export const sendTestPush = async (userId: string): Promise<void> => {
     };
 
     try {
-        await webpush.sendNotification(user.pushSubscription, JSON.stringify(payload));
+        await webpush.sendNotification(user.pushSubscription, JSON.stringify(payload), {
+            urgency: 'high',
+            TTL: 60,           // Test notifications expire after 1 minute
+        });
     } catch (error: any) {
         if (error.statusCode === 410 || error.statusCode === 404) {
             await User.findByIdAndUpdate(userId, { $set: { pushSubscription: null } });
