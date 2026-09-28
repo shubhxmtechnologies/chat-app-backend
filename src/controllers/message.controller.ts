@@ -148,17 +148,18 @@ export const sendMediaMessage = asyncHandler(
 
                 if (recipientId) {
                     io.to(`user:${recipientId}`).emit("receive_message", message);
-                    const sender = await User.findById(senderId).select("username");
-                    const senderName = sender?.username || "Someone";
-                    const mediaLabel = messageType === "voice" ? "🎤 Voice note" : "📷 Photo";
-                    sendPushNotification(recipientId, {
-                        title: `New message from ${senderName}`,
-                        body: mediaLabel,
-                        url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
-                        chatId,
-                        senderId,
-                        senderName,
-                        tag: `chat_${chatId}`
+                    User.findById(senderId).select("username").lean().then((sender) => {
+                        const senderName = sender?.username || "Someone";
+                        const mediaLabel = messageType === "voice" ? "🎤 Voice note" : "📷 Photo";
+                        sendPushNotification(recipientId, {
+                            title: `New message from ${senderName}`,
+                            body: mediaLabel,
+                            url: `${envConfig.CLIENT_ORIGIN}/chats/${chatId}`,
+                            chatId,
+                            senderId,
+                            senderName,
+                            tag: `msg_${chatId}_${Date.now()}`
+                        }).catch(console.error);
                     }).catch(console.error);
                 }
                 io.to(`user:${senderId}`).emit("receive_message", message);
